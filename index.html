@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>整理書櫃</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      background: #1a1a2e;
+    }
+    #game-container {
+      display: flex;
+      flex-direction: row;
+      width: 100%;
+      height: 100%;
+    }
+    #game-container .game-canvas-wrapper {
+      flex: 1;
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    #game-container canvas {
+      display: block;
+      touch-action: none;
+      max-width: 100%;
+      max-height: 100%;
+    }
+    /* 書架層分隔線樣式（實際線條在 canvas 上繪製以對齊版面） */
+    .shelf-separator {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #fff;
+      pointer-events: none;
+    }
+    #debug-panel {
+      width: 280px;
+      flex-shrink: 0;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: rgba(0,0,0,0.92);
+      color: #0f0;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 13px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <main id="game-container"></main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script src="sketch.js"></script>
+</body>
+</html>
