@@ -103,6 +103,7 @@ let swapHistoryZone;  // 最下面已交換區 { x, y, w, h, pad, lineHeight }
 const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧'];
 let currentLevel = 0;   // 當前關卡 0–21；過關後換成下一關的卡片
 let conveyorZone;       // { x, y, w, h, pad, segmentW } 輸送帶區塊
+let conveyorBlurBuffer = null;  // 輸送帶模糊格用離屏 buffer（重用）
 
 // 回傳當前關卡使用的 3 個 typeIndex（0=0,1,2；1=3,4,5；2=6,7,8）
 function getLevelTypeIndices(level) {
@@ -452,6 +453,14 @@ function drawSwapZone() {
 
 function drawConveyorBelt() {
   if (!conveyorZone) return;
+  const pad = conveyorZone.pad;
+  const segW = conveyorZone.segmentW;
+  const segH = conveyorZone.h - 2 * pad;
+  const segX0 = conveyorZone.x + pad + conveyorZone.labelWidth;
+  const segY0 = conveyorZone.y + pad;
+  const segY = conveyorZone.y + conveyorZone.h / 2;
+  const nextLevelSegmentIndex = 0;  // 只顯示「下一關」為清晰，其餘打馬賽克（模糊）
+
   // 輸送帶背景（淺棕色）
   fill(180, 165, 140);
   noStroke();
@@ -460,25 +469,50 @@ function drawConveyorBelt() {
   fill(40, 35, 30);
   textAlign(LEFT, CENTER);
   textSize(Math.min(14, conveyorZone.w * 0.032));
-  text('輸送帶', conveyorZone.x + conveyorZone.pad, conveyorZone.y + conveyorZone.h / 2);
-  // 多格：下一關起依序顯示（ABC 時顯示 DEF, GHI, JKL, MNO, PQR, STU；過關後往左推）
-  const segW = conveyorZone.segmentW;
-  const segX0 = conveyorZone.x + conveyorZone.pad + conveyorZone.labelWidth;
-  const segY = conveyorZone.y + conveyorZone.h / 2;
+  text('輸送帶', conveyorZone.x + pad, conveyorZone.y + conveyorZone.h / 2);
+
+  // 先畫「非下一關」的格子：用離屏 buffer + 模糊濾鏡（馬賽克效果）
+  const blurAmount = 4;
+  const bufW = Math.ceil(segW) + 2;
+  const bufH = Math.ceil(segH) + 2;
+  if (!conveyorBlurBuffer || conveyorBlurBuffer.width !== bufW || conveyorBlurBuffer.height !== bufH) {
+    if (conveyorBlurBuffer) conveyorBlurBuffer.remove();
+    conveyorBlurBuffer = createGraphics(bufW, bufH);
+  }
   for (let i = 0; i < conveyorZone.segmentCount; i++) {
+    if (i === nextLevelSegmentIndex) continue;  // 下一關稍後單獨畫清晰
     const idx = currentLevel + 1 + i;
     const label = idx < LEVEL_GROUPS.length ? LEVEL_GROUPS[idx] : '—';
     const rx = segX0 + i * (segW + conveyorZone.gap);
-    fill(255, 255, 255, 60);
-    stroke(100, 90, 70);
-    strokeWeight(2);
-    rect(rx, conveyorZone.y + conveyorZone.pad, segW, conveyorZone.h - 2 * conveyorZone.pad, 6);
-    noStroke();
-    fill(50, 45, 40);
-    textAlign(CENTER, CENTER);
-    textSize(Math.min(16, segW * 0.2));
-    text(label, rx + segW / 2, segY);
+    conveyorBlurBuffer.clear();
+    conveyorBlurBuffer.background(180, 165, 140);
+    conveyorBlurBuffer.fill(255, 255, 255, 60);
+    conveyorBlurBuffer.stroke(100, 90, 70);
+    conveyorBlurBuffer.strokeWeight(2);
+    conveyorBlurBuffer.rect(1, 1, segW, segH, 6);
+    conveyorBlurBuffer.noStroke();
+    conveyorBlurBuffer.fill(50, 45, 40);
+    conveyorBlurBuffer.textAlign(CENTER, CENTER);
+    conveyorBlurBuffer.textSize(Math.min(16, segW * 0.2));
+    conveyorBlurBuffer.text(label, segW / 2 + 1, segH / 2 + 1);
+    conveyorBlurBuffer.filter(BLUR, blurAmount);
+    image(conveyorBlurBuffer, rx, segY0, bufW, bufH);
   }
+
+  // 只畫「下一關」那一格清晰（無模糊）
+  const i = nextLevelSegmentIndex;
+  const idx = currentLevel + 1 + i;
+  const label = idx < LEVEL_GROUPS.length ? LEVEL_GROUPS[idx] : '—';
+  const rx = segX0 + i * (segW + conveyorZone.gap);
+  fill(255, 255, 255, 60);
+  stroke(100, 90, 70);
+  strokeWeight(2);
+  rect(rx, segY0, segW, segH, 6);
+  noStroke();
+  fill(50, 45, 40);
+  textAlign(CENTER, CENTER);
+  textSize(Math.min(16, segW * 0.2));
+  text(label, rx + segW / 2, segY);
 }
 
 function drawSwapHistoryZone() {
