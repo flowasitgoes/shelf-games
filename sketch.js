@@ -11,11 +11,20 @@ const ITEMS_PER_CELL = 3;  // 每櫃 3 格（小格），共 27 小格
 const ITEMS_PER_TYPE = 9;  // A、B、C 各 9 份，共 27 個物品
 const SLOTS_GRID_COLS = 3; // 每櫃內 3 格排成 1×3（橫排）
 const SLOTS_GRID_ROWS = 1; // 每櫃只有 1 列
+// 關卡 0: A,B,C；關卡 1: D,E,F；關卡 2: G,H,I（過關後換成下一關的卡片）
 const ITEM_TYPES = [
-  { id: 'pen', name: 'A', color: [52, 152, 219] },
-  { id: 'eraser', name: 'B', color: [241, 196, 15] },
-  { id: 'book', name: 'C', color: [231, 76, 60] }
+  { id: 'a', name: 'A', color: [52, 152, 219] },
+  { id: 'b', name: 'B', color: [241, 196, 15] },
+  { id: 'c', name: 'C', color: [231, 76, 60] },
+  { id: 'd', name: 'D', color: [46, 204, 113] },
+  { id: 'e', name: 'E', color: [155, 89, 182] },
+  { id: 'f', name: 'F', color: [230, 126, 34] },
+  { id: 'g', name: 'G', color: [26, 188, 156] },
+  { id: 'h', name: 'H', color: [241, 148, 138] },
+  { id: 'i', name: 'I', color: [149, 165, 166] }
 ];
+const TYPES_PER_LEVEL = 3;  // 每關 3 種
+const NUM_LEVELS = 3;      // 關卡數（ABC, DEF, GHI）
 
 let cells;           // [ [], [], ... ] 共 9 櫃，每櫃 3 格為 { typeIndex, displayX, displayY }[]
 let draggedItem;     // { cellIndex, slotIndex, typeIndex, offsetX, offsetY } | null
@@ -33,6 +42,16 @@ let cellW, cellH;    // 每櫃寬度、每櫃高度
 const SWAP_ZONE_SLOTS = 2;
 let swapZone;         // { x, y, w, h, slotW, slotH, gap } 每格中心由 getSwapZoneSlotCenter 算
 let swapHistoryZone;  // 最下面已交換區 { x, y, w, h, pad, lineHeight }
+// 輸送帶（關卡預覽）：在已交換區上方，顯示接下來的關卡組
+const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI'];  // 第一關 ABC、第二關 DEF、第三關 GHI
+let currentLevel = 0;   // 當前關卡 0=ABC, 1=DEF, 2=GHI；過關後換成下一關的卡片（D,E,F…）
+let conveyorZone;       // { x, y, w, h, pad, segmentW } 輸送帶區塊
+
+// 回傳當前關卡使用的 3 個 typeIndex（0=0,1,2；1=3,4,5；2=6,7,8）
+function getLevelTypeIndices(level) {
+  const base = level * TYPES_PER_LEVEL;
+  return [base, base + 1, base + 2];
+}
 
 // --- Debug ---
 let DEBUG = true;     // 按 D 鍵切換
@@ -138,6 +157,8 @@ function computeLayout() {
 
   // 最下面：已交換區（顯示實際發生過的交換）
   const historyZoneH = Math.min(height * 0.14, 80);
+  const conveyorGap = 8;
+  const conveyorH = Math.min(height * 0.1, 56);
   swapHistoryZone = {
     x: margin,
     y: height - historyZoneH - margin,
@@ -146,6 +167,19 @@ function computeLayout() {
     pad: 8,
     lineHeight: 18
   };
+  // 輸送帶：在已交換區上方，顯示接下來的關卡組（CDE、EFG…）
+  const conveyorLabelW = 52;
+  conveyorZone = {
+    x: margin,
+    y: swapHistoryZone.y - conveyorH - conveyorGap,
+    w: width - 2 * margin,
+    h: conveyorH,
+    pad: 10,
+    labelWidth: conveyorLabelW,
+    segmentCount: 2,
+    gap: 12
+  };
+  conveyorZone.segmentW = (conveyorZone.w - 2 * conveyorZone.pad - conveyorZone.labelWidth - conveyorZone.gap) / conveyorZone.segmentCount;
 }
 
 function getSwapZoneSlotCenter(slotIndex) {
@@ -155,10 +189,8 @@ function getSwapZoneSlotCenter(slotIndex) {
   return { x: cx, y: cy };
 }
 
-function initGame() {
-  gameState = 'idle';
-  startTime = null;
-  endTime = null;
+// 載入指定關卡：該關的 3 種卡片（ABC / DEF / GHI）各 9 個，隨機分到 9 櫃
+function initLevel(level) {
   draggedItem = null;
   stateHistory = [];
   highlightLog = [];
@@ -166,10 +198,11 @@ function initGame() {
   historyStep = 0;
   prevHoverTargetItem = null;
 
-  // 27 個物品：每種類型 9 個（A、B、C 各 9 份）
+  const levelIndices = getLevelTypeIndices(level);
   const allItems = [];
-  for (let t = 0; t < ITEM_TYPES.length; t++) {
-    for (let i = 0; i < ITEMS_PER_TYPE; i++) {
+  for (let i = 0; i < levelIndices.length; i++) {
+    const t = levelIndices[i];
+    for (let j = 0; j < ITEMS_PER_TYPE; j++) {
       allItems.push({ typeIndex: t });
     }
   }
@@ -182,8 +215,16 @@ function initGame() {
     cells[cellIndex].push({ typeIndex: allItems[i].typeIndex, displayX: 0, displayY: 0 });
   }
   updateItemPositions();
-  setReplayButtonRect();
   pushStateToHistory('init');
+}
+
+function initGame() {
+  gameState = 'idle';
+  startTime = null;
+  endTime = null;
+  currentLevel = 0;  // 新局從第一關 ABC 開始
+  initLevel(currentLevel);
+  setReplayButtonRect();
 }
 
 // 把目前 cells 壓成 27 格狀態：slot = cell*ITEMS_PER_CELL + slotInCell，值 = typeIndex 或 -1
@@ -278,6 +319,7 @@ function draw() {
   drawShelves();
   drawShelfSeparators();
   drawSwapZone();
+  drawConveyorBelt();
   drawSwapHistoryZone();
   // 拖動時畫出可放置的格子範圍（方便除錯）
   if (DEBUG && draggedItem !== null) {
@@ -350,6 +392,37 @@ function drawSwapZone() {
   }
 }
 
+function drawConveyorBelt() {
+  if (!conveyorZone) return;
+  // 輸送帶背景（淺棕色）
+  fill(180, 165, 140);
+  noStroke();
+  rect(conveyorZone.x, conveyorZone.y, conveyorZone.w, conveyorZone.h, 8);
+  // 標題「輸送帶」
+  fill(40, 35, 30);
+  textAlign(LEFT, CENTER);
+  textSize(Math.min(14, conveyorZone.w * 0.032));
+  text('輸送帶', conveyorZone.x + conveyorZone.pad, conveyorZone.y + conveyorZone.h / 2);
+  // 兩格：下一關、下下一關（第一組 ABC 時顯示 CDE、EFG；過關後換成 CDE 再顯示 EFG…）
+  const segW = conveyorZone.segmentW;
+  const segX0 = conveyorZone.x + conveyorZone.pad + conveyorZone.labelWidth;
+  const segY = conveyorZone.y + conveyorZone.h / 2;
+  for (let i = 0; i < conveyorZone.segmentCount; i++) {
+    const idx = currentLevel + 1 + i;
+    const label = idx < LEVEL_GROUPS.length ? LEVEL_GROUPS[idx] : '—';
+    const rx = segX0 + i * (segW + conveyorZone.gap);
+    fill(255, 255, 255, 60);
+    stroke(100, 90, 70);
+    strokeWeight(2);
+    rect(rx, conveyorZone.y + conveyorZone.pad, segW, conveyorZone.h - 2 * conveyorZone.pad, 6);
+    noStroke();
+    fill(50, 45, 40);
+    textAlign(CENTER, CENTER);
+    textSize(Math.min(16, segW * 0.2));
+    text(label, rx + segW / 2, segY);
+  }
+}
+
 function drawSwapHistoryZone() {
   if (!swapHistoryZone) return;
   // 背景（較深色區分）
@@ -393,8 +466,9 @@ function drawDropZones() {
 
 function stateToString(state) {
   if (!state || state.length !== SLOTS_TOTAL) return '[]';
-  const names = ['A', 'B', 'C'];
-  const parts = state.map(function (v) { return v === -1 ? '-' : names[v]; });
+  const parts = state.map(function (v) {
+    return v === -1 ? '-' : (ITEM_TYPES[v] ? ITEM_TYPES[v].name : '?');
+  });
   // 3 行 × 9 格，方便閱讀
   let s = '';
   for (let r = 0; r < 3; r++) {
@@ -418,15 +492,21 @@ function getDebugPanelText() {
   if (lastReleaseLog) {
     s += 'lastRelease: targetCell=' + lastReleaseLog.targetCell + ' placed=' + lastReleaseLog.placed + ' at ' + lastReleaseLog.px.toFixed(0) + ',' + lastReleaseLog.py.toFixed(0) + '\n';
   }
-  s += '\n27格狀態(A/B/C): ' + stateToString(currentState) + '\n\n';
-  s += '每櫃完成狀態（過關需每櫃 3 格同類）:\n';
-  const names = ['A', 'B', 'C'];
+  s += '\n27格狀態: ' + stateToString(currentState) + '\n\n';
+  const levelIndices = getLevelTypeIndices(currentLevel);
+  const n0 = ITEM_TYPES[levelIndices[0]].name;
+  const n1 = ITEM_TYPES[levelIndices[1]].name;
+  const n2 = ITEM_TYPES[levelIndices[2]].name;
+  s += '每櫃完成狀態（過關需每櫃 3 格同類 ' + n0 + n1 + n2 + '）:\n';
   for (let c = 0; c < NUM_CELLS; c++) {
     const list = cells[c];
     const counts = [0, 0, 0];
-    for (let i = 0; i < list.length; i++) counts[list[i].typeIndex]++;
+    for (let i = 0; i < list.length; i++) {
+      const idx = levelIndices.indexOf(list[i].typeIndex);
+      if (idx >= 0) counts[idx]++;
+    }
     const same = (counts[0] === ITEMS_PER_CELL || counts[1] === ITEMS_PER_CELL || counts[2] === ITEMS_PER_CELL);
-    s += '  櫃' + c + ': A' + counts[0] + ' B' + counts[1] + ' C' + counts[2] + (same ? ' ✓ 完成' : ' 未完成') + '\n';
+    s += '  櫃' + c + ': ' + n0 + counts[0] + ' ' + n1 + counts[1] + ' ' + n2 + counts[2] + (same ? ' ✓ 完成' : ' 未完成') + '\n';
   }
   s += '\nstateHistory (最近):\n';
   const histShow = stateHistory.slice(-8);
@@ -517,6 +597,7 @@ function drawItems() {
 
 function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   if (isHighlight === undefined) isHighlight = false;
+  if (typeIndex < 0 || typeIndex >= ITEM_TYPES.length) return;
   const t = ITEM_TYPES[typeIndex];
   const pad = 10;
   const gap = 6;
@@ -562,16 +643,19 @@ function drawTimer() {
 }
 
 function drawWinConditionHint() {
+  const levelIndices = getLevelTypeIndices(currentLevel);
+  const names = levelIndices.map(function (i) { return ITEM_TYPES[i].name; }).join('、');
   fill(200, 220, 255);
   noStroke();
   textAlign(LEFT, TOP);
   textSize(Math.min(14, width * 0.03));
-  text('過關：9 櫃（3×3）每櫃 3 格需「全部同一種」（A、B 或 C）', 20, 52);
+  text('過關：9 櫃（3×3）每櫃 3 格需「全部同一種」（' + names + '）', 20, 52);
 }
 
 // 在畫面上直接顯示每櫃完成狀態，方便看出「為什麼還沒過關」
 function drawShelfCompletionOnScreen() {
   if (gameState !== 'playing') return;
+  const levelIndices = getLevelTypeIndices(currentLevel);
   const ts = Math.min(12, width * 0.022);
   textSize(ts);
   textAlign(LEFT, TOP);
@@ -579,10 +663,16 @@ function drawShelfCompletionOnScreen() {
   for (let c = 0; c < NUM_CELLS; c++) {
     const list = cells[c];
     const counts = [0, 0, 0];
-    for (let i = 0; i < list.length; i++) counts[list[i].typeIndex]++;
+    for (let i = 0; i < list.length; i++) {
+      const idx = levelIndices.indexOf(list[i].typeIndex);
+      if (idx >= 0) counts[idx]++;
+    }
     const same = (counts[0] === ITEMS_PER_CELL || counts[1] === ITEMS_PER_CELL || counts[2] === ITEMS_PER_CELL);
     fill(same ? 120 : 255, same ? 255 : 200, same ? 120 : 200);
-    const line = '櫃' + c + ': A' + counts[0] + ' B' + counts[1] + ' C' + counts[2] + (same ? ' ✓' : ' 未完成');
+    const n0 = ITEM_TYPES[levelIndices[0]].name;
+    const n1 = ITEM_TYPES[levelIndices[1]].name;
+    const n2 = ITEM_TYPES[levelIndices[2]].name;
+    const line = '櫃' + c + ': ' + n0 + counts[0] + ' ' + n1 + counts[1] + ' ' + n2 + counts[2] + (same ? ' ✓' : ' 未完成');
     text(line, 20, y);
     y += ts + 2;
   }
@@ -802,20 +892,32 @@ function pointerReleased(px, py) {
 
 function checkWin() {
   if (gameState === 'completed' || !cells) return;
-  // 過關條件：9 櫃 × 每櫃 3 格，且每櫃 3 格全部同一種（A／B／C）
+  const levelIndices = getLevelTypeIndices(currentLevel);
+  // 過關條件：9 櫃 × 每櫃 3 格，且每櫃 3 格全部同一種（當前關的 3 種之一）
   for (let c = 0; c < NUM_CELLS; c++) {
     const list = cells[c];
     if (!list || list.length !== ITEMS_PER_CELL) return;
     const t = Number(list[0].typeIndex);
-    if (Number.isNaN(t) || t < 0 || t > 2) return;
+    if (levelIndices.indexOf(t) < 0) return;
     for (let s = 1; s < list.length; s++) {
       if (Number(list[s].typeIndex) !== t) return;
     }
   }
-  gameState = 'completed';
   if (startTime == null) startTime = millis();
-  endTime = millis();
-  console.log('[checkWin] 過關！耗時 ' + ((endTime - startTime) / 1000).toFixed(1) + ' 秒');
+  const elapsed = (millis() - startTime) / 1000;
+  if (currentLevel < NUM_LEVELS - 1) {
+    // 還有下一關：直接換成下一關的卡片（D,E,F 或 G,H,I）
+    currentLevel++;
+    console.log('[checkWin] 過關！耗時 ' + elapsed.toFixed(1) + ' 秒，進入第 ' + (currentLevel + 1) + ' 關 ' + LEVEL_GROUPS[currentLevel]);
+    initLevel(currentLevel);
+    gameState = 'playing';
+    startTime = millis();
+  } else {
+    // 最後一關也過了：顯示過關
+    gameState = 'completed';
+    endTime = millis();
+    console.log('[checkWin] 全破！耗時 ' + elapsed.toFixed(1) + ' 秒');
+  }
 }
 
 function mousePressed() {
