@@ -11,7 +11,7 @@ const ITEMS_PER_CELL = 3;  // 每櫃 3 格（小格），共 27 小格
 const ITEMS_PER_TYPE = 9;  // A、B、C 各 9 份，共 27 個物品
 const SLOTS_GRID_COLS = 3; // 每櫃內 3 格排成 1×3（橫排）
 const SLOTS_GRID_ROWS = 1; // 每櫃只有 1 列
-// 關卡 0: A,B,C；關卡 1: D,E,F；關卡 2: G,H,I（過關後換成下一關的卡片）
+// 關卡 0–7: ABC, DEF, GHI, JKL, MNO, PQR, STU, VWX（過關後換成下一關的卡片）
 const ITEM_TYPES = [
   { id: 'a', name: 'A', color: [52, 152, 219] },
   { id: 'b', name: 'B', color: [241, 196, 15] },
@@ -21,10 +21,67 @@ const ITEM_TYPES = [
   { id: 'f', name: 'F', color: [230, 126, 34] },
   { id: 'g', name: 'G', color: [26, 188, 156] },
   { id: 'h', name: 'H', color: [241, 148, 138] },
-  { id: 'i', name: 'I', color: [149, 165, 166] }
+  { id: 'i', name: 'I', color: [149, 165, 166] },
+  { id: 'j', name: 'J', color: [52, 73, 94] },
+  { id: 'k', name: 'K', color: [255, 154, 158] },
+  { id: 'l', name: 'L', color: [129, 199, 132] },
+  { id: 'm', name: 'M', color: [171, 71, 188] },
+  { id: 'n', name: 'N', color: [255, 213, 79] },
+  { id: 'o', name: 'O', color: [66, 165, 245] },
+  { id: 'p', name: 'P', color: [239, 83, 80] },
+  { id: 'q', name: 'Q', color: [102, 187, 106] },
+  { id: 'r', name: 'R', color: [156, 39, 176] },
+  { id: 's', name: 'S', color: [255, 167, 38] },
+  { id: 't', name: 'T', color: [0, 188, 212] },
+  { id: 'u', name: 'U', color: [233, 30, 99] },
+  { id: 'v', name: 'V', color: [76, 175, 80] },
+  { id: 'w', name: 'W', color: [255, 235, 59] },
+  { id: 'x', name: 'X', color: [121, 85, 72] },
+  { id: 'wo', name: '我', color: [233, 30, 99] },
+  { id: 'ai', name: '愛', color: [244, 67, 54] },
+  { id: 'ni', name: '你', color: [63, 81, 181] },
+  { id: 'yin', name: '因', color: [94, 53, 177] },
+  { id: 'wei', name: '為', color: [255, 152, 0] },
+  { id: 'ni2', name: '你', color: [63, 81, 181] },
+  { id: 'ni3', name: '你', color: [69, 90, 100] },
+  { id: 'shi', name: '是', color: [205, 220, 57] },
+  { id: 'nv', name: '妳', color: [255, 64, 129] },
+  { id: 'ke', name: '可', color: [57, 73, 171] },
+  { id: 'yi', name: '以', color: [0, 137, 123] },
+  { id: 'ma', name: '嗎', color: [255, 87, 34] },
+  { id: 'ai2', name: '矮', color: [103, 58, 183] },
+  { id: 'you', name: '油', color: [255, 193, 7] },
+  { id: 'la', name: '啦', color: [38, 166, 154] },
+  { id: 'dang', name: '當', color: [183, 28, 28] },
+  { id: 'ran', name: '然', color: [85, 139, 47] },
+  { id: 'hao', name: '好', color: [97, 97, 97] },
+  { id: 'ni4', name: '你', color: [55, 71, 79] },
+  { id: 'zao', name: '早', color: [255, 160, 0] },
+  { id: 'shuo', name: '說', color: [2, 119, 189] },
+  { id: 'a_zh', name: '阿', color: [142, 36, 170] },
+  { id: 'bu', name: '不', color: [211, 47, 47] },
+  { id: 'ran2', name: '然', color: [51, 105, 30] },
+  { id: 'qin', name: '親', color: [0, 96, 100] },
+  { id: 'yi2', name: '一', color: [245, 124, 0] },
+  { id: 'ge', name: '個', color: [93, 64, 55] },
+  { id: 'wo2', name: '我', color: [194, 24, 91] },
+  { id: 'bu2', name: '不', color: [198, 40, 40] },
+  { id: 'yao', name: '要', color: [123, 31, 162] },
+  { id: 'qin2', name: '親', color: [0, 77, 64] },
+  { id: 'liang', name: '兩', color: [251, 192, 45] },
+  { id: 'ge2', name: '個', color: [109, 76, 65] },
+  { id: 'cai', name: '才', color: [30, 136, 229] },
+  { id: 'bu3', name: '不', color: [229, 57, 53] },
+  { id: 'yao2', name: '要', color: [106, 27, 154] },
+  { id: 'qin3', name: '親', color: [0, 121, 107] },
+  { id: 'san', name: '三', color: [255, 202, 40] },
+  { id: 'ge3', name: '個', color: [78, 52, 46] },
+  { id: 'na', name: '那', color: [62, 39, 35] },
+  { id: 'hao2', name: '好', color: [115, 115, 115] },
+  { id: 'ba', name: '吧', color: [255, 112, 67] }
 ];
 const TYPES_PER_LEVEL = 3;  // 每關 3 種
-const NUM_LEVELS = 3;      // 關卡數（ABC, DEF, GHI）
+const NUM_LEVELS = 22;      // 關卡數（…當然好, 你早說～那好吧）
 
 let cells;           // [ [], [], ... ] 共 9 櫃，每櫃 3 格為 { typeIndex, displayX, displayY }[]
 let draggedItem;     // { cellIndex, slotIndex, typeIndex, offsetX, offsetY } | null
@@ -43,8 +100,8 @@ const SWAP_ZONE_SLOTS = 2;
 let swapZone;         // { x, y, w, h, slotW, slotH, gap } 每格中心由 getSwapZoneSlotCenter 算
 let swapHistoryZone;  // 最下面已交換區 { x, y, w, h, pad, lineHeight }
 // 輸送帶（關卡預覽）：在已交換區上方，顯示接下來的關卡組
-const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI'];  // 第一關 ABC、第二關 DEF、第三關 GHI
-let currentLevel = 0;   // 當前關卡 0=ABC, 1=DEF, 2=GHI；過關後換成下一關的卡片（D,E,F…）
+const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧'];
+let currentLevel = 0;   // 當前關卡 0–21；過關後換成下一關的卡片
 let conveyorZone;       // { x, y, w, h, pad, segmentW } 輸送帶區塊
 
 // 回傳當前關卡使用的 3 個 typeIndex（0=0,1,2；1=3,4,5；2=6,7,8）
@@ -167,8 +224,9 @@ function computeLayout() {
     pad: 8,
     lineHeight: 18
   };
-  // 輸送帶：在已交換區上方，顯示接下來的關卡組（CDE、EFG…）
+  // 輸送帶：在已交換區上方，顯示接下來的關卡組（含 JKL, MNO, PQR, STU, VWX）
   const conveyorLabelW = 52;
+  const conveyorSegmentCount = 7;  // 一次顯示接下來 7 關
   conveyorZone = {
     x: margin,
     y: swapHistoryZone.y - conveyorH - conveyorGap,
@@ -176,10 +234,10 @@ function computeLayout() {
     h: conveyorH,
     pad: 10,
     labelWidth: conveyorLabelW,
-    segmentCount: 2,
-    gap: 12
+    segmentCount: conveyorSegmentCount,
+    gap: 8
   };
-  conveyorZone.segmentW = (conveyorZone.w - 2 * conveyorZone.pad - conveyorZone.labelWidth - conveyorZone.gap) / conveyorZone.segmentCount;
+  conveyorZone.segmentW = (conveyorZone.w - 2 * conveyorZone.pad - conveyorZone.labelWidth - (conveyorZone.segmentCount - 1) * conveyorZone.gap) / conveyorZone.segmentCount;
 }
 
 function getSwapZoneSlotCenter(slotIndex) {
@@ -403,7 +461,7 @@ function drawConveyorBelt() {
   textAlign(LEFT, CENTER);
   textSize(Math.min(14, conveyorZone.w * 0.032));
   text('輸送帶', conveyorZone.x + conveyorZone.pad, conveyorZone.y + conveyorZone.h / 2);
-  // 兩格：下一關、下下一關（第一組 ABC 時顯示 CDE、EFG；過關後換成 CDE 再顯示 EFG…）
+  // 多格：下一關起依序顯示（ABC 時顯示 DEF, GHI, JKL, MNO, PQR, STU；過關後往左推）
   const segW = conveyorZone.segmentW;
   const segX0 = conveyorZone.x + conveyorZone.pad + conveyorZone.labelWidth;
   const segY = conveyorZone.y + conveyorZone.h / 2;
@@ -765,6 +823,26 @@ function getClosestSlotInCell(px, py, cellIndex) {
   return bestSlot;
 }
 
+// 點擊輸送帶：回傳被點到的「格索引」0..segmentCount-1（該格對應關卡 currentLevel+1+i）；若沒點到或該格是「—」則回傳 -1
+function getConveyorSegmentAt(px, py) {
+  if (!conveyorZone) return -1;
+  const pad = conveyorZone.pad;
+  const segW = conveyorZone.segmentW;
+  const segX0 = conveyorZone.x + pad + conveyorZone.labelWidth;
+  const segY0 = conveyorZone.y + pad;
+  const segH = conveyorZone.h - 2 * pad;
+  if (py < segY0 || py >= segY0 + segH) return -1;
+  for (let i = 0; i < conveyorZone.segmentCount; i++) {
+    const rx = segX0 + i * (segW + conveyorZone.gap);
+    if (px >= rx && px < rx + segW) {
+      const levelIndex = currentLevel + 1 + i;
+      if (levelIndex >= LEVEL_GROUPS.length) return -1;  // 該格是「—」不給切
+      return i;
+    }
+  }
+  return -1;
+}
+
 function getCellAt(px, py) {
   if (px < 0 || px > width || py < 0 || py > height) return -1;
   if (py < shelfY || py >= shelfY + shelfH) return -1;
@@ -805,6 +883,19 @@ function pointerPressed(px, py) {
     if (px >= replayBtn.x && px <= replayBtn.x + replayBtn.w &&
         py >= replayBtn.y && py <= replayBtn.y + replayBtn.h) {
       initGame();
+    }
+    return;
+  }
+  // 點擊輸送帶某一格：切換到該關（換牌）
+  const conveyorSeg = getConveyorSegmentAt(px, py);
+  if (conveyorSeg >= 0) {
+    const targetLevel = currentLevel + 1 + conveyorSeg;
+    if (targetLevel >= 0 && targetLevel < NUM_LEVELS) {
+      currentLevel = targetLevel;
+      initLevel(currentLevel);
+      gameState = 'playing';
+      if (startTime == null) startTime = millis();
+      if (DEBUG) console.log('[pointerPressed] 切換到第 ' + (currentLevel + 1) + ' 關 ' + LEVEL_GROUPS[currentLevel]);
     }
     return;
   }
