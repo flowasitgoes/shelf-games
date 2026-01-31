@@ -264,6 +264,8 @@ function draw() {
     const pointerX = xy[0];
     const pointerY = xy[1];
     hoverTargetItem = hitTestItemExcluding(pointerX, pointerY, draggedItem.cellIndex, draggedItem.slotIndex);
+    // 不允許櫃內交換：若滑鼠在「同一櫃」的其他格上，不亮起（讓使用者知道不能櫃內交換）
+    if (hoverTargetItem && hoverTargetItem.cellIndex === draggedItem.cellIndex) hoverTargetItem = null;
     // 亮起來變化時記錄：從無→有 或 從 A→B
     if (hoverTargetItem && (!prevHoverTargetItem || prevHoverTargetItem.cellIndex !== hoverTargetItem.cellIndex || prevHoverTargetItem.slotIndex !== hoverTargetItem.slotIndex)) {
       pushHighlightLog(hoverTargetItem.cellIndex, hoverTargetItem.slotIndex, '拖曳滑過此格 (pointer 在物品上)');
@@ -752,27 +754,24 @@ function pointerReleased(px, py) {
       cells[targetCell].push(item);
       placed = true;
     } else {
-      // 目標格已滿：與「放開時 pointer 下的那格」交換；若沒壓到物品則用「離釋放點最近的槽」
+      // 目標格已滿：必須放開在「該櫃的某一個具體格（物品）」上才交換，不能只在櫃邊界就交換
       const hit = hitTestItemExcluding(px, py, draggedItem.cellIndex, draggedItem.slotIndex);
-      let swapSlot = 0;
       if (hit && hit.cellIndex === targetCell) {
-        swapSlot = hit.slotIndex;
-      } else {
-        swapSlot = getClosestSlotInCell(px, py, targetCell);
+        const swapSlot = hit.slotIndex;
+        const srcCell = draggedItem.cellIndex;
+        const srcSlot = draggedItem.slotIndex;
+        const myItem = cells[srcCell].splice(srcSlot, 1)[0];
+        const theirItem = cells[targetCell].splice(swapSlot, 1)[0];
+        cells[targetCell].splice(swapSlot, 0, myItem);   // 我的放到目標格的那一槽
+        cells[srcCell].splice(srcSlot, 0, theirItem);    // 他的放到來源格的那一槽
+        placed = true;
+        swapHistory.push({
+          from: { cell: srcCell, slot: srcSlot },
+          to: { cell: targetCell, slot: swapSlot }
+        });
+        if (swapHistory.length > SWAP_HISTORY_MAX) swapHistory.shift();
       }
-      const srcCell = draggedItem.cellIndex;
-      const srcSlot = draggedItem.slotIndex;
-      const myItem = cells[srcCell].splice(srcSlot, 1)[0];
-      const theirItem = cells[targetCell].splice(swapSlot, 1)[0];
-      cells[targetCell].splice(swapSlot, 0, myItem);   // 我的放到目標格的那一槽
-      cells[srcCell].splice(srcSlot, 0, theirItem);    // 他的放到來源格的那一槽
-      placed = true;
-      // 記錄到已交換區
-      swapHistory.push({
-        from: { cell: srcCell, slot: srcSlot },
-        to: { cell: targetCell, slot: swapSlot }
-      });
-      if (swapHistory.length > SWAP_HISTORY_MAX) swapHistory.shift();
+      // 若沒壓到目標櫃的任一物品（只在櫃邊界／空白），不交換，物品彈回
     }
   }
   const srcCell = draggedItem.cellIndex;
