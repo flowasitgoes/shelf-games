@@ -128,9 +128,164 @@ const STATE_HISTORY_MAX = 30;
 const HIGHLIGHT_LOG_MAX = 50;
 const SWAP_HISTORY_MAX = 12;   // 已交換區顯示筆數
 let swapHistory = [];          // [ { from: { cell, slot }, to: { cell, slot } } ]
+// 過關恭喜特效（彩帶＋貓走過）：過場時顯示約 3 秒，結束後才切下一關
+const CELEBRATION_DURATION_MS = 3000;
+const CONFETTI_COUNT = 80;
+let levelCompleteCelebration = null;  // { active, startedAt, duration, completedLevel, particles[] } | null
 const DEBUG_PANEL_WIDTH = 280;
 let debugPanelEl = null;
 let gameCanvasWrapper = null;
+let erikaCelebrationWrap = null;  // 過場時顯示的えりか風格 CSS 角色（走路動畫）
+
+// 彩帶粒子：從畫面上方噴出、落下，帶旋轉與隨機顏色
+function createConfettiParticles() {
+  const particles = [];
+  const colors = [
+    [255, 107, 107], [255, 159, 67], [255, 205, 57], [129, 199, 132],
+    [77, 208, 225], [149, 117, 205], [239, 83, 80], [255, 235, 59],
+    [76, 175, 80], [33, 150, 243], [156, 39, 176], [255, 152, 0]
+  ];
+  const cx = width / 2;
+  const topY = height * 0.15;
+  for (let i = 0; i < CONFETTI_COUNT; i++) {
+    const angle = -PI / 2 + random(-0.6, 0.6);
+    const speed = random(4, 12);
+    particles.push({
+      x: cx + random(-width * 0.4, width * 0.4),
+      y: topY + random(-20, 40),
+      vx: cos(angle) * speed + random(-2, 2),
+      vy: sin(angle) * speed + random(0, 4),
+      color: colors[floor(random(colors.length))],
+      size: random(6, 14),
+      rotation: random(TWO_PI),
+      rotationSpeed: random(-0.15, 0.15),
+      shape: random() < 0.7 ? 'rect' : 'circle'
+    });
+  }
+  return particles;
+}
+
+function updateAndDrawConfetti() {
+  if (!levelCompleteCelebration || !levelCompleteCelebration.particles) return;
+  const t = millis() - levelCompleteCelebration.startedAt;
+  const duration = levelCompleteCelebration.duration;
+  const progress = t / duration;
+  const gravity = 0.35;
+  const particles = levelCompleteCelebration.particles;
+
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += gravity;
+    p.rotation += p.rotationSpeed;
+    p.vx *= 0.99;
+    p.vy *= 0.99;
+    push();
+    fill(p.color[0], p.color[1], p.color[2], 255 * (1 - progress * 0.7));
+    noStroke();
+    translate(p.x, p.y);
+    rotate(p.rotation);
+    if (p.shape === 'rect') {
+      rect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+    } else {
+      circle(0, 0, p.size);
+    }
+    pop();
+  }
+}
+
+// 貓走過的動畫（Nyan Cat 風格）：彩虹尾＋吐司身體＋貓臉，自左向右移動並輕微上下晃動
+function drawNyanCatCelebration(progress) {
+  const catW = Math.min(120, width * 0.28);
+  const catH = catW * (167 / 283);
+  const trailW = catW * 1.8;
+  const baseY = height * 0.52 + sin(progress * PI * 6) * 6;
+  const startX = -trailW - catW * 0.25;  // 再早一點跑：起點往右，貓更早進畫面
+  const endX = width + catW * 0.6;
+  const x = lerp(startX, endX, easeInOutQuad(progress));
+  const wx = catW / 34.3;
+  const hx = catH / 20;
+
+  push();
+  translate(x, baseY);
+
+  // 彩虹尾（在貓身體左側，橫條紋）
+  const rainbowColors = [
+    [231, 76, 60], [230, 126, 34], [241, 196, 15],
+    [46, 204, 113], [52, 152, 219], [142, 68, 173]
+  ];
+  const stripeH = (catH * 0.35) / 6;
+  noStroke();
+  for (let i = 0; i < 6; i++) {
+    fill(rainbowColors[i][0], rainbowColors[i][1], rainbowColors[i][2]);
+    rect(-trailW - catW * 0.5, -catH / 2 + i * stripeH, trailW + catW * 0.5, stripeH + 1);
+  }
+
+  // 吐司身體（圓角矩形、粉紅糖霜）
+  fill(255, 105, 180);  // hotpink
+  rect(-catW * 0.32, -catH * 0.45, catW * 0.65, catH * 0.75, 6);
+  // 糖霜上的小點（sprinkles）
+  fill(200, 60, 130);
+  const sprinkles = [
+    [2 * wx, 3 * hx], [8 * wx, 2 * hx], [11 * wx, 2 * hx], [15 * wx, 4 * hx],
+    [6 * wx, 5 * hx], [4 * wx, 6.5 * hx], [2 * wx, 9 * hx], [8 * wx, 8 * hx],
+    [6 * wx, 11 * hx], [3 * wx, 13 * hx], [9 * wx, 12 * hx]
+  ];
+  for (const [sx, sy] of sprinkles) {
+    rect(-catW * 0.32 + sx, -catH * 0.45 + sy, 4, 4);
+  }
+
+  // 貓頭（右側）：臉橢圓＋耳朵＋眼睛＋鬍鬚
+  translate(catW * 0.22, 0);
+  fill(255, 220, 180);
+  noStroke();
+  ellipse(0, -catH * 0.08, catW * 0.35, catH * 0.5);
+  fill(255, 105, 180);
+  triangle(-catW * 0.08, -catH * 0.45, -catW * 0.02, -catH * 0.7, catW * 0.04, -catH * 0.45);
+  triangle(catW * 0.08, -catH * 0.45, catW * 0.02, -catH * 0.7, -catW * 0.04, -catH * 0.45);
+  fill(40, 30, 20);
+  ellipse(-catW * 0.06, -catH * 0.12, 5, 6);
+  ellipse(catW * 0.06, -catH * 0.12, 5, 6);
+  fill(255);
+  ellipse(-catW * 0.055, -catH * 0.14, 2, 2);
+  ellipse(catW * 0.065, -catH * 0.14, 2, 2);
+  stroke(80, 60, 50);
+  strokeWeight(1);
+  line(catW * 0.12, -catH * 0.05, catW * 0.22, -catH * 0.08);
+  line(catW * 0.12, -catH * 0.02, catW * 0.22, -catH * 0.02);
+  line(catW * 0.12, catH * 0.01, catW * 0.22, catH * 0.04);
+  noStroke();
+
+  pop();
+}
+
+function easeInOutQuad(t) {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+}
+
+function drawLevelCompleteCelebrationOverlay() {
+  if (!levelCompleteCelebration || !levelCompleteCelebration.active) return;
+  const t = millis() - levelCompleteCelebration.startedAt;
+  const duration = levelCompleteCelebration.duration;
+  const progress = Math.min(1, t / duration);
+
+  push();
+  fill(0, 0, 0, 100);
+  noStroke();
+  rect(0, 0, width, height);
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(Math.min(42, width * 0.1));
+  text('恭喜過關！', width / 2, height * 0.28);
+  const groupName = LEVEL_GROUPS[levelCompleteCelebration.completedLevel] || '—';
+  textSize(Math.min(24, width * 0.055));
+  fill(255, 235, 59);
+  text(groupName + ' 完成', width / 2, height * 0.36);
+  pop();
+
+  updateAndDrawConfetti();
+  drawNyanCatCelebration(progress);
+}
 
 function getGameCanvasSize() {
   return { w: windowWidth, h: windowHeight };
@@ -396,6 +551,21 @@ function draw() {
   }
   if (gameState === 'completed') {
     drawResultOverlay();
+  }
+  if (levelCompleteCelebration && levelCompleteCelebration.active) {
+    const overlayEl = document.getElementById('celebration-overlay');
+    if (overlayEl) overlayEl.classList.add('visible');
+    drawLevelCompleteCelebrationOverlay();
+    const t = millis() - levelCompleteCelebration.startedAt;
+    if (t >= levelCompleteCelebration.duration) {
+      const overlayEl = document.getElementById('celebration-overlay');
+      if (overlayEl) overlayEl.classList.remove('visible');
+      currentLevel++;
+      initLevel(currentLevel);
+      startTime = millis();
+      levelCompleteCelebration = null;
+      console.log('[draw] 恭喜特效結束，進入第 ' + (currentLevel + 1) + ' 關 ' + LEVEL_GROUPS[currentLevel]);
+    }
   }
   if (DEBUG) {
     logDebugToConsole();
@@ -1030,6 +1200,7 @@ function pointerReleased(px, py) {
 
 function checkWin() {
   if (gameState === 'completed' || !cells) return;
+  if (levelCompleteCelebration && levelCompleteCelebration.active) return;
   const levelIndices = getLevelTypeIndices(currentLevel);
   // 過關條件：9 櫃 × 每櫃 3 格，且每櫃 3 格全部同一種（當前關的 3 種之一）
   for (let c = 0; c < NUM_CELLS; c++) {
@@ -1044,12 +1215,16 @@ function checkWin() {
   if (startTime == null) startTime = millis();
   const elapsed = (millis() - startTime) / 1000;
   if (currentLevel < NUM_LEVELS - 1) {
-    // 還有下一關：直接換成下一關的卡片（D,E,F 或 G,H,I）
-    currentLevel++;
-    console.log('[checkWin] 過關！耗時 ' + elapsed.toFixed(1) + ' 秒，進入第 ' + (currentLevel + 1) + ' 關 ' + LEVEL_GROUPS[currentLevel]);
-    initLevel(currentLevel);
-    gameState = 'playing';
-    startTime = millis();
+    // 還有下一關：先播恭喜彩帶特效，結束後再切下一關
+    levelCompleteCelebration = {
+      active: true,
+      startedAt: millis(),
+      duration: CELEBRATION_DURATION_MS,
+      completedLevel: currentLevel,
+      particles: createConfettiParticles()
+    };
+    console.log('[checkWin] 過關！耗時 ' + elapsed.toFixed(1) + ' 秒，播放恭喜特效後進入下一關');
+    return;
   } else {
     // 最後一關也過了：顯示過關
     gameState = 'completed';
