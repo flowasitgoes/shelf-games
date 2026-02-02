@@ -616,24 +616,24 @@ function computeLayout() {
   swapZone.slotW = (innerW - swapZone.gap) / SWAP_ZONE_SLOTS;
   swapZone.slotH = swapZone.h - 2 * swapZone.pad;
 
-  // 最下面：已交換區（顯示實際發生過的交換）
-  const historyZoneH = Math.min(height * 0.14, 80);
+  // 最下面：已交換區（顯示實際發生過的交換）—— 已註解
+  // const historyZoneH = Math.min(height * 0.14, 80);
   const conveyorGap = 8;
   const conveyorH = Math.min(height * 0.1, 56);
-  swapHistoryZone = {
-    x: margin,
-    y: height - historyZoneH - margin,
-    w: width - 2 * margin,
-    h: historyZoneH,
-    pad: 8,
-    lineHeight: 18
-  };
+  // swapHistoryZone = {
+  //   x: margin,
+  //   y: height - historyZoneH - margin,
+  //   w: width - 2 * margin,
+  //   h: historyZoneH,
+  //   pad: 8,
+  //   lineHeight: 18
+  // };
   // 輸送帶：在已交換區上方，顯示接下來的關卡組（含 JKL, MNO, PQR, STU, VWX）
   const conveyorLabelW = 52;
   const conveyorSegmentCount = 7;  // 一次顯示接下來 7 關
   conveyorZone = {
     x: margin,
-    y: swapHistoryZone.y - conveyorH - conveyorGap,
+    y: height - conveyorH - margin - conveyorGap,  // 已交換區註解後，輸送帶貼底
     w: width - 2 * margin,
     h: conveyorH,
     pad: 10,
@@ -819,7 +819,7 @@ function draw() {
   drawShelfSeparators();
   drawSwapZone();
   drawConveyorBelt();
-  drawSwapHistoryZone();
+  // drawSwapHistoryZone();  // 已交換區已註解
   // 拖動時畫出可放置的格子範圍（方便除錯）
   if (DEBUG && draggedItem !== null) {
     drawDropZones();
@@ -1470,71 +1470,6 @@ function finishDropAnimation() {
   dropAnimation = null;
 }
 
-// 裝飾性卡片邊框：上下單線、角星、葉飾、小圓點（單一連續線條系統，無交叉弧線）
-function drawOrnamentalCardBorder(cx, cy, w, h, strokeCol, strokeW) {
-  const left = cx - w / 2;
-  const right = cx + w / 2;
-  const top = cy - h / 2;
-  const bottom = cy + h / 2;
-  const m = Math.min(w, h);
-  const inset = m * 0.12;
-  const sw = strokeW;
-  stroke(strokeCol[0], strokeCol[1], strokeCol[2]);
-  strokeWeight(sw);
-  noFill();
-  strokeCap(ROUND);
-  strokeJoin(ROUND);
-
-  // 1. 上／下緣：各一條橫線
-  const x1 = left + inset;
-  const x2 = right - inset;
-  line(x1, top, x2, top);
-  line(x1, bottom, x2, bottom);
-
-  // 2. 四芒星（圓潤／花瓣感）在左上與右下角
-  const starR = m * 0.12;
-  const starInset = m * 0.18;
-  function drawFourPointStar(px, py) {
-    for (let a = 0; a < 4; a++) {
-      const angle = (a * HALF_PI) - QUARTER_PI;
-      const x0 = px + cos(angle) * starR * 0.2;
-      const y0 = py + sin(angle) * starR * 0.2;
-      const x1 = px + cos(angle) * starR;
-      const y1 = py + sin(angle) * starR;
-      line(x0, y0, x1, y1);
-    }
-  }
-  drawFourPointStar(left + starInset, top + starInset);
-  drawFourPointStar(right - starInset, bottom - starInset);
-
-  // 3. 葉飾在右上與左下角（2～3 個細長橢圓，對角向內）
-  const leafW = m * 0.04;
-  const leafH = m * 0.12;
-  const leafInset = m * 0.22;
-  function drawLeafCluster(px, py, rot) {
-    push();
-    translate(px, py);
-    rotate(rot);
-    for (let i = 0; i < 3; i++) {
-      const dx = (i - 1) * (leafH * 0.9);
-      noFill();
-      ellipse(dx, 0, leafW, leafH);
-    }
-    pop();
-  }
-  drawLeafCluster(right - leafInset, top + leafInset, PI + QUARTER_PI);
-  drawLeafCluster(left + leafInset, bottom - leafInset, QUARTER_PI);
-
-  // 4. 角旁小圓點（標點感）
-  const dotR = Math.max(1, m * 0.03);
-  circle(left + inset * 0.6, top + inset * 0.6, dotR * 2);
-  circle(right - inset * 0.6, top + inset * 0.6, dotR * 2);
-  circle(left + inset * 0.6, bottom - inset * 0.6, dotR * 2);
-  circle(right - inset * 0.6, bottom - inset * 0.6, dotR * 2);
-
-  noStroke();
-}
-
 function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   if (isHighlight === undefined) isHighlight = false;
   if (typeIndex < 0 || typeIndex >= ITEM_TYPES.length) return;
@@ -1545,8 +1480,6 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   const slotH = (cellH - 2 * pad - (SLOTS_GRID_ROWS - 1) * gap) / SLOTS_GRID_ROWS;
   const baseSize = Math.min(slotW, slotH) * 0.82;
   const size = isDragging ? baseSize * 1.15 : baseSize;
-  const cardW = size * 1.4;
-  const cardH = size;
   push();
   if (isDragging && !ANIMATION_LITE) {
     drawingContext.shadowOffsetX = 4;
@@ -1555,14 +1488,16 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
     drawingContext.shadowColor = 'rgba(0,0,0,0.4)';
   }
   fill(t.color[0], t.color[1], t.color[2]);
-  noStroke();
+  if (isHighlight) {
+    stroke(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2]);
+    strokeWeight(4);
+  } else {
+    stroke(THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]);
+    strokeWeight(isDragging ? 3 : 1.5);
+  }
   rectMode(CENTER);
-  rect(x, y, cardW, cardH, 6);
-  const borderCol = isHighlight
-    ? [THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2]]
-    : [THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]];
-  const borderW = isHighlight ? 2.5 : (isDragging ? 2 : 1.2);
-  drawOrnamentalCardBorder(x, y, cardW, cardH, borderCol, borderW);
+  rect(x, y, size * 1.4, size, 6);
+  noStroke();
   fill(255);
   textAlign(CENTER, CENTER);
   textSize(Math.max(12, size * 0.45));
