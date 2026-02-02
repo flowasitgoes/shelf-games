@@ -111,10 +111,68 @@ const ITEM_TYPES = [
   { id: 'slab27', name: '◇', color: [0, 137, 123] },
   { id: 'slab28', name: '◇', color: [103, 58, 183] },
   { id: 'slab29', name: '◇', color: [38, 166, 154] },
-  { id: 'slab30', name: '◇', color: [183, 28, 28] }
+  { id: 'slab30', name: '◇', color: [183, 28, 28] },
+  // awe12～awe30 關卡用（level 34～52，typeIndex 102～158）
+  { id: 'slab31', name: '◇', color: [52, 152, 219] },
+  { id: 'slab32', name: '◇', color: [241, 196, 15] },
+  { id: 'slab33', name: '◇', color: [231, 76, 60] },
+  { id: 'slab34', name: '◇', color: [46, 204, 113] },
+  { id: 'slab35', name: '◇', color: [155, 89, 182] },
+  { id: 'slab36', name: '◇', color: [230, 126, 34] },
+  { id: 'slab37', name: '◇', color: [26, 188, 156] },
+  { id: 'slab38', name: '◇', color: [241, 148, 138] },
+  { id: 'slab39', name: '◇', color: [149, 165, 166] },
+  { id: 'slab40', name: '◇', color: [52, 73, 94] },
+  { id: 'slab41', name: '◇', color: [255, 154, 158] },
+  { id: 'slab42', name: '◇', color: [129, 199, 132] },
+  { id: 'slab43', name: '◇', color: [171, 71, 188] },
+  { id: 'slab44', name: '◇', color: [255, 213, 79] },
+  { id: 'slab45', name: '◇', color: [66, 165, 245] },
+  { id: 'slab46', name: '◇', color: [239, 83, 80] },
+  { id: 'slab47', name: '◇', color: [102, 187, 106] },
+  { id: 'slab48', name: '◇', color: [156, 39, 176] },
+  { id: 'slab49', name: '◇', color: [255, 167, 38] },
+  { id: 'slab50', name: '◇', color: [0, 188, 212] },
+  { id: 'slab51', name: '◇', color: [233, 30, 99] },
+  { id: 'slab52', name: '◇', color: [76, 175, 80] },
+  { id: 'slab53', name: '◇', color: [255, 235, 59] },
+  { id: 'slab54', name: '◇', color: [121, 85, 72] },
+  { id: 'slab55', name: '◇', color: [94, 53, 177] },
+  { id: 'slab56', name: '◇', color: [255, 152, 0] },
+  { id: 'slab57', name: '◇', color: [0, 137, 123] },
+  { id: 'slab58', name: '◇', color: [103, 58, 183] },
+  { id: 'slab59', name: '◇', color: [38, 166, 154] },
+  { id: 'slab60', name: '◇', color: [183, 28, 28] },
+  { id: 'slab61', name: '◇', color: [85, 139, 47] },
+  { id: 'slab62', name: '◇', color: [97, 97, 97] },
+  { id: 'slab63', name: '◇', color: [55, 71, 79] },
+  { id: 'slab64', name: '◇', color: [255, 160, 0] },
+  { id: 'slab65', name: '◇', color: [2, 119, 189] },
+  { id: 'slab66', name: '◇', color: [142, 36, 170] },
+  { id: 'slab67', name: '◇', color: [211, 47, 47] },
+  { id: 'slab68', name: '◇', color: [51, 105, 30] },
+  { id: 'slab69', name: '◇', color: [0, 96, 100] },
+  { id: 'slab70', name: '◇', color: [245, 124, 0] },
+  { id: 'slab71', name: '◇', color: [93, 64, 55] },
+  { id: 'slab72', name: '◇', color: [194, 24, 91] },
+  { id: 'slab73', name: '◇', color: [198, 40, 40] },
+  { id: 'slab74', name: '◇', color: [123, 31, 162] },
+  { id: 'slab75', name: '◇', color: [0, 77, 64] },
+  { id: 'slab76', name: '◇', color: [251, 192, 45] },
+  { id: 'slab77', name: '◇', color: [109, 76, 65] },
+  { id: 'slab78', name: '◇', color: [30, 136, 229] },
+  { id: 'slab79', name: '◇', color: [229, 57, 53] },
+  { id: 'slab80', name: '◇', color: [106, 27, 154] },
+  { id: 'slab81', name: '◇', color: [0, 121, 107] },
+  { id: 'slab82', name: '◇', color: [255, 202, 40] },
+  { id: 'slab83', name: '◇', color: [78, 52, 46] },
+  { id: 'slab84', name: '◇', color: [62, 39, 35] },
+  { id: 'slab85', name: '◇', color: [115, 115, 115] },
+  { id: 'slab86', name: '◇', color: [255, 112, 67] },
+  { id: 'slab87', name: '◇', color: [244, 67, 54] }
 ];
 const TYPES_PER_LEVEL = 3;  // 每關 3 種
-const NUM_LEVELS = 33;      // 關卡數（…Avatars, awe1～awe10）
+const NUM_LEVELS = 53;      // 關卡數（…Avatars, awe1～awe30）
 
 // --- 小動物療癒風主題色（暖米/奶油/薄荷/蜜桃）---
 const THEME_BG = [250, 245, 235];           // 畫布背景 暖米
@@ -159,16 +217,16 @@ const SWAP_ZONE_SLOTS = 2;
 let swapZone;         // { x, y, w, h, slotW, slotH, gap } 每格中心由 getSwapZoneSlotCenter 算
 let swapHistoryZone;  // 最下面已交換區 { x, y, w, h, pad, lineHeight }
 // 輸送帶（關卡預覽）：在已交換區上方，顯示接下來的關卡組
-const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧', 'Avatars', 'awe1', 'awe2', 'awe3', 'awe4', 'awe5', 'awe6', 'awe7', 'awe8', 'awe9', 'awe10'];
+const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧', 'Avatars', 'awe1', 'awe2', 'awe3', 'awe4', 'awe5', 'awe6', 'awe7', 'awe8', 'awe9', 'awe10', 'awe11', 'awe12', 'awe13', 'awe14', 'awe15', 'awe16', 'awe17', 'awe18', 'awe19', 'awe20', 'awe21', 'awe22', 'awe23', 'awe24', 'awe25', 'awe26', 'awe27', 'awe28', 'awe29', 'awe30'];
 // 關卡頭像：key = 關卡索引，value = 該關 3 種類型依序的圖片 URL。規則：第 N 關（index N-1）的頭像放在 public/avatars/{N}/ 底下，檔名 avatar_1.png、avatar_2.png、avatar_3.png
 const AVATAR_URLS_BY_LEVEL = { 22: ['/public/avatars/23/avatar_1.png', '/public/avatars/23/avatar_2.png', '/public/avatars/23/avatar_3.png'] };
 let avatarImagesByLevel = {};  // 已載入的 PImage：avatarImagesByLevel[level][localIndex]
-// awe1～awe10（第 24～33 關）：從 Font Awesome 隨機選 3 個圖示，已用過的記錄在 localStorage 不重複
+// awe1～awe30（第 24～53 關）：從 Font Awesome 隨機選 3 個圖示，已用過的記錄在 localStorage 不重複
 const FONT_AWESOME_SLAB_ICONS = ['star', 'heart', 'bolt', 'fire', 'camera', 'music', 'gem', 'snowflake', 'sun', 'moon', 'cloud', 'leaf', 'tree', 'bug', 'cat', 'dog', 'fish', 'feather', 'football', 'basketball', 'baseball', 'chess-knight', 'chess-king', 'chess-queen', 'crown', 'gift', 'bell', 'key', 'lock', 'unlock', 'flag', 'bookmark', 'lightbulb', 'wand-magic-sparkles', 'star-half-stroke', 'thumbs-up', 'hand-point-right', 'circle', 'square', 'triangle', 'hexagon', 'certificate', 'medal', 'trophy', 'anchor', 'umbrella', 'snowman', 'star-of-life', 'magnet', 'flask', 'gear', 'wrench', 'hammer', 'screwdriver-wrench'];
 const SLAB_LEVEL_FIRST = 23;   // awe1 的 level index
-const SLAB_LEVEL_LAST = 32;   // awe10 的 level index
+const SLAB_LEVEL_LAST = 52;   // awe30 的 level index
 const LOCAL_STORAGE_KEY_USED_SLAB = 'shelfGame_usedSlabIcons';
-// awe1～awe10 關卡圖示清單：存 localStorage，重整後不變、利於快取。版本變更時會重新產生清單
+// awe1～awe30 關卡圖示清單：存 localStorage，重整後不變、利於快取。版本變更時會重新產生清單
 const AWE_LEVEL_ICONS_STORAGE_KEY = 'shelfGame_aweLevelIcons';
 const AWE_LEVEL_ICONS_VERSION = 1;
 const FONT_AWESOME_SVG_BASE = 'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/svgs/solid/';
@@ -200,7 +258,7 @@ const SLAB_ICON_GRADIENT_STOPS_PLATINUM = [
   { offset: '84%', color: '#dedeff' },
   { offset: '100%', color: '#555564' }
 ];
-const SLAB_ICON_GRADIENT_ANGLE_PLATINUM = -72;
+const SLAB_ICON_GRADIENT_ANGLE_PLATINUM = -72;  // 參考 .button-platinum；實際使用改為每關隨機角度
 // 隨機產生多層灰階漸層 stops（5～7 個色階，在黑與白之間）
 function getRandomGrayscaleStops() {
   var count = 5 + Math.floor(Math.random() * 3);
@@ -277,6 +335,8 @@ let slabIconNamesByLevel = {};   // key = level index 23..32，value = [name0, n
 let slabImagesByLevel = {};     // key = level index 23..32，value = [img0, img1, img2]
 let slabGradientByLevel = {};   // key = level index 23..32，value = { stops: [{offset, color}, ...] } 多層灰階 或 { start, end } 雙色
 let slabFallbackTimeoutId = null;
+// Font Awesome / 頭像卡片圖示大小倍率（0.92 = 92%）
+let slabIconSizeScale = 0.92;
 let currentLevel = 0;   // 當前關卡 0–32；過關後換成下一關的卡片
 let conveyorZone;       // { x, y, w, h, pad, segmentW } 輸送帶區塊
 // 輸送帶「非下一關」的模糊格：依 currentLevel 快取，只在換關時做一次 blur，避免每幀 6 次 filter 傷效能
@@ -334,7 +394,7 @@ function clearUsedSlabIcons() {
   } catch (e) {}
 }
 
-// 從 localStorage 讀取 awe1～awe10 的圖示清單；格式 { version, levels: { "23": ["star","heart","bolt"], ... } }，缺漏或版本不符回傳 null
+// 從 localStorage 讀取 awe1～awe30 的圖示清單；格式 { version, levels: { "23": ["star","heart","bolt"], ... } }，缺漏或版本不符回傳 null
 function getAweLevelIconsFromStorage() {
   try {
     var raw = localStorage.getItem(AWE_LEVEL_ICONS_STORAGE_KEY);
@@ -355,7 +415,7 @@ function getAweLevelIconsFromStorage() {
   }
 }
 
-// 將 slabIconNamesByLevel（僅 23..32）寫入 localStorage，含版本
+// 將 slabIconNamesByLevel（23..52）寫入 localStorage，含版本
 function saveAweLevelIconsToStorage() {
   try {
     var levels = {};
@@ -383,11 +443,11 @@ function pickThreeSlabIcons() {
   return chosen;
 }
 
-// 確保單一 awe 關卡（levelIndex 23..32）已開始載入圖示；圖示名稱由 ensureAllSlabLevelsReady 從清單填入，此處只負責載入 SVG
+// 確保單一 awe 關卡（levelIndex 23..52）已開始載入圖示；圖示名稱由 ensureAllSlabLevelsReady 從清單填入，此處只負責載入 SVG
 function ensureSlabIconsForLevel(levelIndex) {
   if (slabIconNamesByLevel[levelIndex] == null) return;
   if (slabGradientByLevel[levelIndex] == null) {
-    slabGradientByLevel[levelIndex] = { stops: SLAB_ICON_GRADIENT_STOPS_PLATINUM, angleDeg: SLAB_ICON_GRADIENT_ANGLE_PLATINUM };
+    slabGradientByLevel[levelIndex] = { stops: SLAB_ICON_GRADIENT_STOPS_PLATINUM, angleDeg: Math.floor(Math.random() * 360) };
   }
   if (slabImagesByLevel[levelIndex] == null) {
     slabImagesByLevel[levelIndex] = [null, null, null];
@@ -416,7 +476,7 @@ function ensureSlabIconsForLevel(levelIndex) {
   }
 }
 
-// 確保 awe1～awe10 共 10 關都選好圖示並開始載入；清單存 localStorage，重整後不變、利於快取
+// 確保 awe1～awe30 共 30 關都選好圖示並開始載入；清單存 localStorage，重整後不變、利於快取
 function ensureAllSlabLevelsReady() {
   var stored = getAweLevelIconsFromStorage();
   if (stored) {
@@ -442,7 +502,7 @@ function ensureAllSlabLevelsReady() {
           const current = slabImagesByLevel[lev][j];
           if (!current || (typeof current.width === 'number' && current.width <= 0)) {
             const rawSvg = SLAB_FALLBACK_SVG_STRINGS[j];
-            var grad = slabGradientByLevel[lev] || { stops: SLAB_ICON_GRADIENT_STOPS_PLATINUM, angleDeg: SLAB_ICON_GRADIENT_ANGLE_PLATINUM };
+            var grad = slabGradientByLevel[lev] || { stops: SLAB_ICON_GRADIENT_STOPS_PLATINUM, angleDeg: Math.floor(Math.random() * 360) };
             var withGradient = grad.stops
               ? applySvgLinearGradient(rawSvg, 'fallbackGrad_' + lev + '_' + j, grad)
               : applySvgLinearGradient(rawSvg, 'fallbackGrad_' + lev + '_' + j, grad.start, grad.end);
@@ -878,6 +938,30 @@ function setup() {
   btn.class('sound-toggle-btn');
   btn.parent(soundBarDiv);
   btn.elt.addEventListener('click', function () { enableSound(); });
+
+  // 圖示大小 UI 暫時不需要，先 comment 掉
+  // (function () {
+  //   try {
+  //     var v = localStorage.getItem(SLAB_ICON_SIZE_STORAGE_KEY);
+  //     if (v != null) { var n = parseFloat(v); if (!isNaN(n) && n >= 0.3 && n <= 2) slabIconSizeScale = n; }
+  //   } catch (e) {}
+  // })();
+  // const iconSizeWrap = createDiv('');
+  // iconSizeWrap.class('icon-size-wrap');
+  // iconSizeWrap.parent(soundBarDiv);
+  // const iconSizeLabel = createSpan('圖示大小');
+  // iconSizeLabel.parent(iconSizeWrap);
+  // const iconSizeSlider = createSlider(0.3, 2, slabIconSizeScale, 0.05);
+  // iconSizeSlider.class('icon-size-slider');
+  // iconSizeSlider.parent(iconSizeWrap);
+  // const iconSizeValue = createSpan(Math.round(slabIconSizeScale * 100) + '%');
+  // iconSizeValue.class('icon-size-value');
+  // iconSizeValue.parent(iconSizeWrap);
+  // iconSizeSlider.elt.addEventListener('input', function () {
+  //   slabIconSizeScale = parseFloat(iconSizeSlider.value());
+  //   iconSizeValue.elt.textContent = Math.round(slabIconSizeScale * 100) + '%';
+  //   try { localStorage.setItem(SLAB_ICON_SIZE_STORAGE_KEY, String(slabIconSizeScale)); } catch (e) {}
+  // });
 
   gameCanvasWrapper = createDiv('');
   gameCanvasWrapper.class('game-canvas-wrapper');
@@ -1850,14 +1934,14 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
     const imgW = cardImg.width;
     const imgH = cardImg.height;
     const scale = Math.min(maxW / imgW, maxH / imgH, 1);
-    const drawW = imgW * scale;
-    const drawH = imgH * scale;
+    const drawW = imgW * scale * slabIconSizeScale;
+    const drawH = imgH * scale * slabIconSizeScale;
     image(cardImg, x, y, drawW, drawH);
   } else {
-    fill(255);
-    textAlign(CENTER, CENTER);
-    textSize(Math.max(12, size * 0.45));
-    text(t.name, x, y);
+  fill(255);
+  textAlign(CENTER, CENTER);
+  textSize(Math.max(12, size * 0.45));
+  text(t.name, x, y);
   }
   if (isDragging && !ANIMATION_LITE) {
     drawingContext.shadowBlur = 0;
