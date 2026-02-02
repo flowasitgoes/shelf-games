@@ -90,6 +90,9 @@ let gameState;       // 'idle' | 'playing' | 'completed'
 let startTime;
 let endTime;
 let replayBtn;       // 再玩一次按鈕區域 { x, y, w, h }
+let audioCtx = null; // Web Audio 用於拖放音效（首次使用者操作時建立並 resume）
+let soundEnabled = false; // 使用者點「開啟音效」後才播放
+let soundBarDiv = null;   // 正上方音效按鈕列
 
 // 書櫃佈局：9 櫃排成 3×3，每櫃寬 cellW、高 cellH
 let shelfY, shelfH;   // 書櫃區域上緣與總高度（3 列）
@@ -110,6 +113,177 @@ let conveyorCachedBlur = { level: -1, pg: null };
 function getLevelTypeIndices(level) {
   const base = level * TYPES_PER_LEVEL;
   return [base, base + 1, base + 2];
+}
+
+// --- 拖放音效（Web Audio 合成，無需音檔）---
+function getAudioContext() {
+  if (audioCtx === null) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioCtx;
+}
+
+// 依關卡回傳 pitch 倍率（每關略不同，同關內一致）
+function getLevelPitchMultiplier(level) {
+  if (level == null) level = typeof currentLevel !== 'undefined' ? currentLevel : 0;
+  return 0.96 + ((level * 31 + 7) % 9) / 100;
+}
+
+function pitchFreq(baseFreq, level) {
+  return Math.round(baseFreq * getLevelPitchMultiplier(level));
+}
+
+function playTone(freq, durationSeconds, type, volume) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    function playNow() {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = type || 'sine';
+      gain.gain.setValueAtTime(volume != null ? volume : 0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + durationSeconds);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + durationSeconds);
+    }
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(playNow).catch(function () { playNow(); });
+    } else {
+      playNow();
+    }
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.warn) console.warn('playTone:', e);
+  }
+}
+
+function playPadChord(freq, durationSeconds, volume) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    function playNow() {
+      const t0 = ctx.currentTime;
+      const decay = durationSeconds;
+      function addVoice(f, vol, type) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = f;
+        osc.type = type || 'sine';
+        gain.gain.setValueAtTime(vol, t0);
+        gain.gain.exponentialRampToValueAtTime(0.001, t0 + decay);
+        osc.start(t0);
+        osc.stop(t0 + decay);
+      }
+      const v = volume != null ? volume : 0.08;
+      addVoice(freq, v * 0.5, 'sine');
+      addVoice(freq * 1.498, v * 0.35, 'sine');
+      addVoice(freq * 2, v * 0.25, 'sine');
+      addVoice(freq * 2.003, v * 0.2, 'sine');
+    }
+    if (ctx.state === 'suspended') ctx.resume().then(playNow).catch(function () { playNow(); });
+    else playNow();
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.warn) console.warn('playPadChord:', e);
+  }
+}
+
+function playDragStartSound() {
+  const f = pitchFreq(520);
+  playTone(f, 0.07, 'sine', 0.12);
+  playPadChord(f, 0.12, 0.07);
+}
+
+function playDropSuccessSound() {
+  const f = pitchFreq(280);
+  playTone(f, 0.12, 'sine', 0.15);
+  playPadChord(f, 0.2, 0.09);
+}
+
+function playDropCancelSound() {
+  const f = pitchFreq(180);
+  playTone(f, 0.06, 'sine', 0.08);
+  playPadChord(f, 0.1, 0.05);
+}
+
+function playLevelCompleteSound() {
+  if (!soundEnabled) return;
+  const L = typeof currentLevel !== 'undefined' ? currentLevel : 0;
+  const c5 = pitchFreq(523, L);
+  const e5 = pitchFreq(659, L);
+  const g5 = pitchFreq(784, L);
+  const c6 = pitchFreq(1047, L);
+  playTone(c5, 0.14, 'sine', 0.14);
+  playPadChord(c5, 0.22, 0.08);
+  setTimeout(function () {
+    playTone(e5, 0.14, 'sine', 0.14);
+    playPadChord(e5, 0.22, 0.08);
+  }, 100);
+  setTimeout(function () {
+    playTone(g5, 0.16, 'sine', 0.15);
+    playPadChord(g5, 0.26, 0.09);
+  }, 220);
+  setTimeout(function () {
+    playTone(c6, 0.35, 'sine', 0.16);
+    playPadChord(c6, 0.4, 0.1);
+  }, 360);
+  setTimeout(function () {
+    playTone(c6, 0.08, 'sine', 0.12);
+    playTone(pitchFreq(1319, L), 0.08, 'sine', 0.1);
+  }, 520);
+  playFirecrackerSound();
+}
+
+function playFirecrackerPop(vol, durationSec) {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    const dur = durationSec != null ? durationSec : 0.035 + Math.random() * 0.02;
+    function playNow() {
+      const sampleRate = ctx.sampleRate;
+      const frameCount = Math.round(sampleRate * dur);
+      const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < frameCount; i++) {
+        const decay = 1 - (i / frameCount) * (i / frameCount);
+        data[i] = (Math.random() * 2 - 1) * decay;
+      }
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(vol != null ? vol : 0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+      src.connect(gain);
+      gain.connect(ctx.destination);
+      src.start(ctx.currentTime);
+      src.stop(ctx.currentTime + dur);
+    }
+    if (ctx.state === 'suspended') ctx.resume().then(playNow).catch(function () { playNow(); });
+    else playNow();
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.warn) console.warn('playFirecrackerPop:', e);
+  }
+}
+
+function playFirecrackerSound() {
+  if (!soundEnabled) return;
+  let t = 0;
+  for (let i = 0; i < 7; i++) {
+    t += 28 + Math.random() * 22;
+    (function (tt, v) {
+      setTimeout(function () { playFirecrackerPop(v, 0.028 + Math.random() * 0.018); }, tt);
+    })(t, 0.18 + Math.random() * 0.12);
+  }
+  t += 90 + Math.random() * 40;
+  for (let j = 0; j < 10; j++) {
+    t += 38 + Math.random() * 45;
+    (function (tt, v) {
+      setTimeout(function () { playFirecrackerPop(v, 0.032 + Math.random() * 0.02); }, tt);
+    })(t, 0.12 + Math.random() * 0.15);
+  }
 }
 
 // --- Debug ---
@@ -291,12 +465,54 @@ function getGameCanvasSize() {
   return { w: windowWidth, h: windowHeight };
 }
 
+function enableSound() {
+  soundEnabled = true;
+  try {
+    const ctx = getAudioContext();
+    const onReady = function () {
+      playTone(440, 0.1, 'sine', 0.12);
+      if (soundBarDiv && soundBarDiv.elt) {
+        const btn = soundBarDiv.elt.querySelector('button');
+        if (btn) {
+          btn.textContent = '音效已開啟';
+          btn.disabled = true;
+          btn.style.opacity = '0.7';
+        }
+      }
+    };
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(onReady).catch(function (e) {
+        if (typeof console !== 'undefined' && console.warn) console.warn('enableSound resume:', e);
+        onReady();
+      });
+    } else {
+      onReady();
+    }
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.warn) console.warn('enableSound:', e);
+  }
+}
+
 function setup() {
   const size = getGameCanvasSize();
-  const cnv = createCanvas(size.w, size.h);
+  const soundAndCanvas = createDiv('');
+  soundAndCanvas.class('sound-and-canvas-wrapper');
+  soundAndCanvas.parent('game-container');
+
+  soundBarDiv = createDiv('');
+  soundBarDiv.class('sound-bar');
+  soundBarDiv.parent(soundAndCanvas);
+
+  const btn = createButton('開啟音效');
+  btn.class('sound-toggle-btn');
+  btn.parent(soundBarDiv);
+  btn.elt.addEventListener('click', function () { enableSound(); });
+
   gameCanvasWrapper = createDiv('');
   gameCanvasWrapper.class('game-canvas-wrapper');
-  gameCanvasWrapper.parent('game-container');
+  gameCanvasWrapper.parent(soundAndCanvas);
+
+  const cnv = createCanvas(size.w, size.h);
   cnv.parent(gameCanvasWrapper);
   cnv.style('display', 'block');
   cnv.elt.setAttribute('touch-action', 'none');
@@ -1131,6 +1347,7 @@ function pointerPressed(px, py) {
     };
     dragX = px - draggedItem.offsetX;
     dragY = py - draggedItem.offsetY;
+    playDragStartSound();
     if (DEBUG) console.log('[pointerPressed] drag started cell=' + hit.cellIndex + ' slot=' + hit.slotIndex);
   }
 }
@@ -1194,6 +1411,7 @@ function pointerReleased(px, py) {
     pushStateToHistory(label);
   }
   if (DEBUG) console.log('[pointerReleased] px=' + px + ' py=' + py + ' targetCell=' + targetCell + ' placed=' + placed + ' cells=' + JSON.stringify(lastReleaseLog.cellCounts));
+  if (placed) playDropSuccessSound(); else playDropCancelSound();
   updateItemPositions();
   if (placed) checkWin();
 }
@@ -1214,6 +1432,7 @@ function checkWin() {
   }
   if (startTime == null) startTime = millis();
   const elapsed = (millis() - startTime) / 1000;
+  playLevelCompleteSound();
   if (currentLevel < NUM_LEVELS - 1) {
     // 還有下一關：先播恭喜彩帶特效，結束後再切下一關
     levelCompleteCelebration = {
