@@ -306,6 +306,12 @@ let swapHistory = [];          // [ { from: { cell, slot }, to: { cell, slot } }
 const CELEBRATION_DURATION_MS = 3000;
 const CONFETTI_COUNT = 80;
 let levelCompleteCelebration = null;  // { active, startedAt, duration, completedLevel, particles[] } | null
+
+// --- 拖曳／放置動畫（主機遊戲感）---
+let dragOrbitPhase = 0;   // 拖曳時軌道星球旋轉相位（每幀累加）
+const DRAG_ORBIT_SPEED = 0.08;
+const DROP_ANIMATION_DURATION_MS = 420;  // 放下時旋轉一圈＋飛行的時長
+let dropAnimation = null; // { startTime, startX, startY, endX, endY, typeIndex, placed, srcCell, srcSlot, targetCell, swapSlot, doSwap } 放開後飛行＋旋轉，結束時再執行實際放置
 const DEBUG_PANEL_WIDTH = 280;
 let debugPanelEl = null;
 let gameCanvasWrapper = null;
@@ -623,6 +629,7 @@ function getSwapZoneSlotCenter(slotIndex) {
 // 載入指定關卡：該關的 3 種卡片（ABC / DEF / GHI）各 9 個，隨機分到 9 櫃
 function initLevel(level) {
   draggedItem = null;
+  dropAnimation = null;
   stateHistory = [];
   highlightLog = [];
   swapHistory = [];
@@ -757,7 +764,10 @@ function draw() {
     drawDropZones();
   }
   drawItems();
-  if (draggedItem !== null) {
+  if (dropAnimation) {
+    drawDropAnimation();
+  } else if (draggedItem !== null) {
+    drawDragOrbitPlanets(dragX, dragY);
     drawOneItem(dragX, dragY, draggedItem.typeIndex, true, false);
   }
   drawTimer();
@@ -1079,11 +1089,116 @@ function drawItems() {
   for (let c = 0; c < NUM_CELLS; c++) {
     for (let s = 0; s < cells[c].length; s++) {
       if (draggedItem && draggedItem.cellIndex === c && draggedItem.slotIndex === s) continue;
+      if (dropAnimation && dropAnimation.srcCell === c && dropAnimation.srcSlot === s) continue;
       const item = cells[c][s];
       const isHighlight = hoverTargetItem && hoverTargetItem.cellIndex === c && hoverTargetItem.slotIndex === s;
       drawOneItem(item.displayX, item.displayY, item.typeIndex, false, isHighlight);
     }
   }
+}
+
+// 拖曳時：在被拖物品周圍畫軌道與旋轉小星球（主機遊戲感）
+function drawDragOrbitPlanets(cx, cy) {
+  dragOrbitPhase += DRAG_ORBIT_SPEED;
+  const orbits = [
+    { radius: 42, speed: 1, planets: 3 },
+    { radius: 58, speed: -0.7, planets: 4 },
+    { radius: 74, speed: 0.5, planets: 2 }
+  ];
+  const planetColors = [
+    [255, 200, 100],
+    [100, 220, 255],
+    [255, 150, 200],
+    [180, 255, 150],
+    [255, 180, 120]
+  ];
+  noFill();
+  for (let o = 0; o < orbits.length; o++) {
+    const orb = orbits[o];
+    const angle = dragOrbitPhase * orb.speed;
+    stroke(255, 255, 255, 40 + 25 * sin(dragOrbitPhase + o));
+    strokeWeight(2);
+    ellipse(cx, cy, orb.radius * 2, orb.radius * 2);
+    for (let p = 0; p < orb.planets; p++) {
+      const a = angle + (TWO_PI * p) / orb.planets;
+      const px = cx + orb.radius * cos(a);
+      const py = cy + orb.radius * sin(a);
+      const col = planetColors[(o + p) % planetColors.length];
+      noStroke();
+      fill(col[0], col[1], col[2], 240);
+      drawingContext.shadowBlur = 10;
+      drawingContext.shadowColor = 'rgba(255,255,255,0.6)';
+      circle(px, py, 10);
+      drawingContext.shadowBlur = 0;
+    }
+  }
+  noStroke();
+  fill(255, 255, 255, 18);
+  drawingContext.shadowBlur = 25;
+  drawingContext.shadowColor = 'rgba(255,255,255,0.4)';
+  ellipse(cx, cy, 100, 100);
+  drawingContext.shadowBlur = 0;
+  noFill();
+}
+
+// 放置動畫：飛行＋旋轉一圈的進度曲線（easeOutBack 讓落地更有彈性）
+function easeOutBack(t) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+function drawDropAnimation() {
+  if (!dropAnimation) return;
+  const t = millis() - dropAnimation.startTime;
+  const dur = DROP_ANIMATION_DURATION_MS;
+  let progress = t / dur;
+  if (progress >= 1) {
+    finishDropAnimation();
+    return;
+  }
+  const eased = easeOutBack(progress);
+  const x = dropAnimation.startX + (dropAnimation.endX - dropAnimation.startX) * eased;
+  const y = dropAnimation.startY + (dropAnimation.endY - dropAnimation.startY) * eased;
+  const rotation = TWO_PI * progress;
+  const scaleAmt = 1 + 0.12 * sin(PI * progress);
+  push();
+  translate(x, y);
+  rotate(rotation);
+  scale(scaleAmt);
+  drawOneItem(0, 0, dropAnimation.typeIndex, false, false);
+  pop();
+}
+
+function finishDropAnimation() {
+  if (!dropAnimation) return;
+  const da = dropAnimation;
+  if (da.placed) {
+    if (da.doSwap) {
+      const myItem = cells[da.srcCell].splice(da.srcSlot, 1)[0];
+      const theirItem = cells[da.targetCell].splice(da.swapSlot, 1)[0];
+      cells[da.targetCell].splice(da.swapSlot, 0, myItem);
+      cells[da.srcCell].splice(da.srcSlot, 0, theirItem);
+      swapHistory.push({
+        from: { cell: da.srcCell, slot: da.srcSlot },
+        to: { cell: da.targetCell, slot: da.swapSlot }
+      });
+      if (swapHistory.length > SWAP_HISTORY_MAX) swapHistory.shift();
+    } else {
+      const item = cells[da.srcCell].splice(da.srcSlot, 1)[0];
+      cells[da.targetCell].push(item);
+    }
+    const label = da.doSwap
+      ? 'swap C' + da.srcCell + '↔C' + da.targetCell
+      : 'drop C' + da.srcCell + '→C' + da.targetCell;
+    pushStateToHistory(label);
+    playDropSuccessSound();
+  } else {
+    playDropCancelSound();
+  }
+  updateItemPositions();
+  if (da.placed) checkWin();
+  dropAnimation = null;
 }
 
 function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
@@ -1362,40 +1477,51 @@ function pointerReleased(px, py) {
   if (draggedItem === null) return;
   const targetCell = getTargetCellWithBoundarySnap(px, py, draggedItem.cellIndex);
   let placed = false;
+  let swapSlot = -1;
+  let doSwap = false;
   if (targetCell >= 0 && targetCell !== draggedItem.cellIndex) {
     if (cells[targetCell].length < ITEMS_PER_CELL) {
-      // 目標格未滿：直接移入
-      const item = cells[draggedItem.cellIndex].splice(draggedItem.slotIndex, 1)[0];
-      cells[targetCell].push(item);
       placed = true;
     } else {
-      // 目標格已滿：必須放開在「該櫃的某一個具體格（物品）」上才交換，不能只在櫃邊界就交換
       const hit = hitTestItemExcluding(px, py, draggedItem.cellIndex, draggedItem.slotIndex);
       if (hit && hit.cellIndex === targetCell) {
-        const swapSlot = hit.slotIndex;
-        const srcCell = draggedItem.cellIndex;
-        const srcSlot = draggedItem.slotIndex;
-        const myItem = cells[srcCell].splice(srcSlot, 1)[0];
-        const theirItem = cells[targetCell].splice(swapSlot, 1)[0];
-        cells[targetCell].splice(swapSlot, 0, myItem);   // 我的放到目標格的那一槽
-        cells[srcCell].splice(srcSlot, 0, theirItem);    // 他的放到來源格的那一槽
+        swapSlot = hit.slotIndex;
+        doSwap = true;
         placed = true;
-        swapHistory.push({
-          from: { cell: srcCell, slot: srcSlot },
-          to: { cell: targetCell, slot: swapSlot }
-        });
-        if (swapHistory.length > SWAP_HISTORY_MAX) swapHistory.shift();
       }
-      // 若沒壓到目標櫃的任一物品（只在櫃邊界／空白），不交換，物品彈回
     }
   }
   const srcCell = draggedItem.cellIndex;
+  const srcSlot = draggedItem.slotIndex;
+  let endX, endY;
   if (!placed) {
-    // 彈回原格（updateItemPositions 會重算位置）
-    const item = cells[draggedItem.cellIndex][draggedItem.slotIndex];
-    item.displayX = dragX;
-    item.displayY = dragY;
+    const cen = getSlotCenter(srcCell, srcSlot);
+    endX = cen[0];
+    endY = cen[1];
+  } else if (doSwap) {
+    const cen = getSlotCenter(targetCell, swapSlot);
+    endX = cen[0];
+    endY = cen[1];
+  } else {
+    const newSlot = cells[targetCell].length;
+    const cen = getSlotCenter(targetCell, newSlot);
+    endX = cen[0];
+    endY = cen[1];
   }
+  dropAnimation = {
+    startTime: millis(),
+    startX: dragX,
+    startY: dragY,
+    endX: endX,
+    endY: endY,
+    typeIndex: draggedItem.typeIndex,
+    placed: placed,
+    srcCell: srcCell,
+    srcSlot: srcSlot,
+    targetCell: targetCell,
+    swapSlot: doSwap ? swapSlot : undefined,
+    doSwap: doSwap
+  };
   draggedItem = null;
   lastReleaseLog = {
     targetCell: targetCell,
@@ -1404,16 +1530,7 @@ function pointerReleased(px, py) {
     py: py,
     cellCounts: cells.map(function (list) { return list.length; })
   };
-  if (placed) {
-    const label = (cells[targetCell].length === ITEMS_PER_CELL && targetCell !== srcCell)
-      ? 'swap C' + srcCell + '↔C' + targetCell
-      : 'drop C' + srcCell + '→C' + targetCell;
-    pushStateToHistory(label);
-  }
-  if (DEBUG) console.log('[pointerReleased] px=' + px + ' py=' + py + ' targetCell=' + targetCell + ' placed=' + placed + ' cells=' + JSON.stringify(lastReleaseLog.cellCounts));
-  if (placed) playDropSuccessSound(); else playDropCancelSound();
-  updateItemPositions();
-  if (placed) checkWin();
+  if (DEBUG) console.log('[pointerReleased] 啟動放置動畫 px=' + px + ' py=' + py + ' targetCell=' + targetCell + ' placed=' + placed);
 }
 
 function checkWin() {
