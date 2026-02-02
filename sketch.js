@@ -81,10 +81,40 @@ const ITEM_TYPES = [
   { id: 'ba', name: '吧', color: [255, 112, 67] },
   { id: 'av1', name: '①', color: [52, 152, 219] },
   { id: 'av2', name: '②', color: [241, 196, 15] },
-  { id: 'av3', name: '③', color: [231, 76, 60] }
+  { id: 'av3', name: '③', color: [231, 76, 60] },
+  { id: 'slab1', name: '◇', color: [52, 152, 219] },
+  { id: 'slab2', name: '◇', color: [241, 196, 15] },
+  { id: 'slab3', name: '◇', color: [231, 76, 60] },
+  { id: 'slab4', name: '◇', color: [46, 204, 113] },
+  { id: 'slab5', name: '◇', color: [155, 89, 182] },
+  { id: 'slab6', name: '◇', color: [230, 126, 34] },
+  { id: 'slab7', name: '◇', color: [26, 188, 156] },
+  { id: 'slab8', name: '◇', color: [241, 148, 138] },
+  { id: 'slab9', name: '◇', color: [149, 165, 166] },
+  { id: 'slab10', name: '◇', color: [52, 73, 94] },
+  { id: 'slab11', name: '◇', color: [255, 154, 158] },
+  { id: 'slab12', name: '◇', color: [129, 199, 132] },
+  { id: 'slab13', name: '◇', color: [171, 71, 188] },
+  { id: 'slab14', name: '◇', color: [255, 213, 79] },
+  { id: 'slab15', name: '◇', color: [66, 165, 245] },
+  { id: 'slab16', name: '◇', color: [239, 83, 80] },
+  { id: 'slab17', name: '◇', color: [102, 187, 106] },
+  { id: 'slab18', name: '◇', color: [156, 39, 176] },
+  { id: 'slab19', name: '◇', color: [255, 167, 38] },
+  { id: 'slab20', name: '◇', color: [0, 188, 212] },
+  { id: 'slab21', name: '◇', color: [233, 30, 99] },
+  { id: 'slab22', name: '◇', color: [76, 175, 80] },
+  { id: 'slab23', name: '◇', color: [255, 235, 59] },
+  { id: 'slab24', name: '◇', color: [121, 85, 72] },
+  { id: 'slab25', name: '◇', color: [94, 53, 177] },
+  { id: 'slab26', name: '◇', color: [255, 152, 0] },
+  { id: 'slab27', name: '◇', color: [0, 137, 123] },
+  { id: 'slab28', name: '◇', color: [103, 58, 183] },
+  { id: 'slab29', name: '◇', color: [38, 166, 154] },
+  { id: 'slab30', name: '◇', color: [183, 28, 28] }
 ];
 const TYPES_PER_LEVEL = 3;  // 每關 3 種
-const NUM_LEVELS = 23;      // 關卡數（…那好吧, 第 23 關 Avatars）
+const NUM_LEVELS = 33;      // 關卡數（…Avatars, awe1～awe10）
 
 // --- 小動物療癒風主題色（暖米/奶油/薄荷/蜜桃）---
 const THEME_BG = [250, 245, 235];           // 畫布背景 暖米
@@ -129,11 +159,28 @@ const SWAP_ZONE_SLOTS = 2;
 let swapZone;         // { x, y, w, h, slotW, slotH, gap } 每格中心由 getSwapZoneSlotCenter 算
 let swapHistoryZone;  // 最下面已交換區 { x, y, w, h, pad, lineHeight }
 // 輸送帶（關卡預覽）：在已交換區上方，顯示接下來的關卡組
-const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧', 'Avatars'];
+const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧', 'Avatars', 'awe1', 'awe2', 'awe3', 'awe4', 'awe5', 'awe6', 'awe7', 'awe8', 'awe9', 'awe10'];
 // 關卡頭像：key = 關卡索引，value = 該關 3 種類型依序的圖片 URL。規則：第 N 關（index N-1）的頭像放在 public/avatars/{N}/ 底下，檔名 avatar_1.png、avatar_2.png、avatar_3.png
 const AVATAR_URLS_BY_LEVEL = { 22: ['/public/avatars/23/avatar_1.png', '/public/avatars/23/avatar_2.png', '/public/avatars/23/avatar_3.png'] };
 let avatarImagesByLevel = {};  // 已載入的 PImage：avatarImagesByLevel[level][localIndex]
-let currentLevel = 0;   // 當前關卡 0–22；過關後換成下一關的卡片
+// awe1～awe10（第 24～33 關）：從 Font Awesome 隨機選 3 個圖示，已用過的記錄在 localStorage 不重複
+const FONT_AWESOME_SLAB_ICONS = ['star', 'heart', 'bolt', 'fire', 'camera', 'music', 'gem', 'snowflake', 'sun', 'moon', 'cloud', 'leaf', 'tree', 'bug', 'cat', 'dog', 'fish', 'feather', 'football', 'basketball', 'baseball', 'chess-knight', 'chess-king', 'chess-queen', 'crown', 'gift', 'bell', 'key', 'lock', 'unlock', 'flag', 'bookmark', 'lightbulb', 'wand-magic-sparkles', 'star-half-stroke', 'thumbs-up', 'hand-point-right', 'circle', 'square', 'triangle', 'hexagon', 'certificate', 'medal', 'trophy', 'anchor', 'umbrella', 'snowman', 'star-of-life', 'magnet', 'flask', 'gear', 'wrench', 'hammer', 'screwdriver-wrench'];
+const SLAB_LEVEL_FIRST = 23;   // awe1 的 level index
+const SLAB_LEVEL_LAST = 32;   // awe10 的 level index
+const LOCAL_STORAGE_KEY_USED_SLAB = 'shelfGame_usedSlabIcons';
+const FONT_AWESOME_SVG_BASE = 'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/svgs/solid/';
+// CDN 載入失敗時用的內嵌 SVG（star、heart、bolt），確保每關一定有三種圖示
+var SLAB_FALLBACK_SVGS;
+(function () {
+  var star = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><path fill="currentColor" d="M316.9 18C311.6 7 300.4 0 288.1 0s-23.4 7-28.6 18L195 150.3 51.4 171.5c-12 1.8-22 10.2-25.7 21.7s-.7 24.2 7.9 32.7L137.8 329 113.2 474.7c-2 12 3 24.2 12.9 31.3s23 8 33.8 2.3l128.3-68.5 128.3 68.5c10.8 5.7 23.9 4.9 33.8-2.3s14.9-19.3 12.9-31.3L438.5 329 542.7 225.9c8.6-8.5 11.7-21.2 7.9-32.7s-13.7-19.9-25.7-21.7L381.2 150.3 316.9 18z"/></svg>';
+  var heart = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M47.6 300.4L228.3 469.1c7.5 7 17.4 10.9 27.7 10.9s20.2-3.9 27.7-10.9L464.4 300.4c31.9-29.7 31.9-79.1 0-108.9c-30.9-28.9-80.8-28.9-111.7 0L256 265.2 159.1 191.5c-30.9-28.9-80.8-28.9-111.7 0c-31.9 29.7-31.9 79.1 0 108.9z"/></svg>';
+  var bolt = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M349.4 44.6c5.9-13.7 1.5-29.7-10.6-38.5s-28.6-8-39.9-1.8l-128 64C141.2 76.6 128 97.1 128 120v192c0 13.3 10.7 24 24 24h128v96c0 17.7 14.3 32 32 32s32-14.3 32-32V352 120c0-22.9-13.2-43.4-31.5-53.2l128-64c11.3-5.6 24.2-5.4 35.3 .6s16.5 24.8 10.6 38.5z"/></svg>';
+  SLAB_FALLBACK_SVGS = ['data:image/svg+xml,' + encodeURIComponent(star), 'data:image/svg+xml,' + encodeURIComponent(heart), 'data:image/svg+xml,' + encodeURIComponent(bolt)];
+})();
+let slabIconNamesByLevel = {};   // key = level index 23..32，value = [name0, name1, name2]（已用圖示會記錄在 localStorage）
+let slabImagesByLevel = {};     // key = level index 23..32，value = [img0, img1, img2]
+let slabFallbackTimeoutId = null;
+let currentLevel = 0;   // 當前關卡 0–32；過關後換成下一關的卡片
 let conveyorZone;       // { x, y, w, h, pad, segmentW } 輸送帶區塊
 // 輸送帶「非下一關」的模糊格：依 currentLevel 快取，只在換關時做一次 blur，避免每幀 6 次 filter 傷效能
 let conveyorCachedBlur = { level: -1, pg: null };
@@ -159,6 +206,104 @@ function getAvatarImageForType(level, typeIndex) {
   if (localIndex === -1 || !avatarImagesByLevel[level] || !avatarImagesByLevel[level][localIndex]) return null;
   const img = avatarImagesByLevel[level][localIndex];
   if (img && img.width && img.width > 0) return img;
+  return null;
+}
+
+// --- 第 24 關 Slab 圖示：從 Font Awesome 隨機選 3 個，已用過的記錄不重複 ---
+function getUsedSlabIcons() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY_USED_SLAB);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function addUsedSlabIcons(names) {
+  const used = getUsedSlabIcons();
+  for (let i = 0; i < names.length; i++) {
+    if (used.indexOf(names[i]) === -1) used.push(names[i]);
+  }
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY_USED_SLAB, JSON.stringify(used));
+  } catch (e) {}
+}
+
+function clearUsedSlabIcons() {
+  try {
+    localStorage.removeItem(LOCAL_STORAGE_KEY_USED_SLAB);
+  } catch (e) {}
+}
+
+// 從 FONT_AWESOME_SLAB_ICONS 中隨機選 3 個不同且尚未用過的圖示；若不足 3 個則清空已用記錄後再選
+function pickThreeSlabIcons() {
+  const used = getUsedSlabIcons();
+  const available = FONT_AWESOME_SLAB_ICONS.filter(function (name) { return used.indexOf(name) === -1; });
+  if (available.length < 3) {
+    clearUsedSlabIcons();
+    return pickThreeSlabIcons();
+  }
+  shuffle(available, true);
+  const chosen = available.slice(0, 3);
+  addUsedSlabIcons(chosen);
+  return chosen;
+}
+
+// 確保單一 awe 關卡（levelIndex 23..32）已選好 3 個圖示並開始載入；每關呼叫 pickThreeSlabIcons() 一次，已用圖示會記錄在 localStorage 不重複
+function ensureSlabIconsForLevel(levelIndex) {
+  if (slabIconNamesByLevel[levelIndex] != null) return;
+  slabIconNamesByLevel[levelIndex] = pickThreeSlabIcons();
+  slabImagesByLevel[levelIndex] = [null, null, null];
+  for (let i = 0; i < 3; i++) {
+    (function (j) {
+      const name = slabIconNamesByLevel[levelIndex][j];
+      const url = FONT_AWESOME_SVG_BASE + name + '.svg';
+      fetch(url, { mode: 'cors' })
+        .then(function (r) { return r.ok ? r.blob() : Promise.reject(); })
+        .then(function (blob) {
+          const blobUrl = URL.createObjectURL(blob);
+          loadImage(blobUrl, function (img) {
+            if (img && slabImagesByLevel[levelIndex] && j >= 0 && j <= 2) slabImagesByLevel[levelIndex][j] = img;
+            URL.revokeObjectURL(blobUrl);
+          });
+        })
+        .catch(function () {});
+    })(i);
+  }
+}
+
+// 確保 awe1～awe10 共 10 關都選好圖示並開始載入；延遲 2.5 秒後對尚未載入成功的格子補上內嵌 SVG 備援
+function ensureAllSlabLevelsReady() {
+  for (let L = SLAB_LEVEL_FIRST; L <= SLAB_LEVEL_LAST; L++) ensureSlabIconsForLevel(L);
+  if (slabFallbackTimeoutId) clearTimeout(slabFallbackTimeoutId);
+  slabFallbackTimeoutId = setTimeout(function () {
+    slabFallbackTimeoutId = null;
+    for (let L = SLAB_LEVEL_FIRST; L <= SLAB_LEVEL_LAST; L++) {
+      if (!slabImagesByLevel[L]) continue;
+      for (let k = 0; k < 3; k++) {
+        (function (lev, j) {
+          const current = slabImagesByLevel[lev][j];
+          if (!current || (typeof current.width === 'number' && current.width <= 0)) {
+            loadImage(SLAB_FALLBACK_SVGS[j], function (img) {
+              if (img && slabImagesByLevel[lev] && j >= 0 && j <= 2) slabImagesByLevel[lev][j] = img;
+            });
+          }
+        })(L, k);
+      }
+    }
+  }, 2500);
+}
+
+// 依類型回傳當前 awe 關卡的圖示 PImage，無或未載入則回傳 null
+function getSlabImageForType(typeIndex) {
+  if (currentLevel < SLAB_LEVEL_FIRST || currentLevel > SLAB_LEVEL_LAST || !slabIconNamesByLevel[currentLevel]) return null;
+  const levelIndices = getLevelTypeIndices(currentLevel);
+  const localIndex = levelIndices.indexOf(typeIndex);
+  if (localIndex < 0 || localIndex > 2 || !slabImagesByLevel[currentLevel][localIndex]) return null;
+  const img = slabImagesByLevel[currentLevel][localIndex];
+  if (img && (typeof img.width !== 'number' || img.width > 0)) return img;
   return null;
 }
 
@@ -584,6 +729,7 @@ function setup() {
 
   computeLayout();
   initGame();
+  ensureAllSlabLevelsReady();
 
   // Debug 改為 console 輸出，不再顯示右側黑屏
   debugPanelEl = createDiv('');
@@ -1516,6 +1662,8 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   const baseSize = Math.min(slotW, slotH) * 0.82;
   const size = isDragging ? baseSize * 1.15 : baseSize;
   const avatarImg = getAvatarImageForType(currentLevel, typeIndex);
+  const slabImg = (currentLevel >= SLAB_LEVEL_FIRST && currentLevel <= SLAB_LEVEL_LAST) ? getSlabImageForType(typeIndex) : null;
+  const cardImg = avatarImg || slabImg;
   push();
   if (isDragging && !ANIMATION_LITE) {
     drawingContext.shadowOffsetX = 4;
@@ -1534,16 +1682,16 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   rectMode(CENTER);
   rect(x, y, size * 1.4, size, 6);
   noStroke();
-  if (avatarImg) {
+  if (cardImg) {
     imageMode(CENTER);
     const maxW = size * 1.4;
     const maxH = size;
-    const imgW = avatarImg.width;
-    const imgH = avatarImg.height;
+    const imgW = cardImg.width;
+    const imgH = cardImg.height;
     const scale = Math.min(maxW / imgW, maxH / imgH, 1);
     const drawW = imgW * scale;
     const drawH = imgH * scale;
-    image(avatarImg, x, y, drawW, drawH);
+    image(cardImg, x, y, drawW, drawH);
   } else {
     fill(255);
     textAlign(CENTER, CENTER);
