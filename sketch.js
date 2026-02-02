@@ -83,6 +83,29 @@ const ITEM_TYPES = [
 const TYPES_PER_LEVEL = 3;  // 每關 3 種
 const NUM_LEVELS = 22;      // 關卡數（…當然好, 你早說～那好吧）
 
+// --- 小動物療癒風主題色（暖米/奶油/薄荷/蜜桃）---
+const THEME_BG = [250, 245, 235];           // 畫布背景 暖米
+const THEME_BG_BOTTOM = [245, 238, 225];    // 漸層底 稍深米
+const THEME_SHELF_FRAME = [180, 155, 130];  // 書櫃外框 暖木
+const THEME_SHELF_INNER = [200, 178, 150];  // 書櫃內底
+const THEME_SHELF_SLOT = [140, 120, 100];   // 格洞
+const THEME_SWAP_ZONE = [180, 220, 210];    // 交換區 薄荷綠
+const THEME_SWAP_ZONE_BORDER = [140, 185, 175];
+const THEME_SWAP_ZONE_TEXT = [50, 80, 75];
+const THEME_CONVEYOR = [220, 210, 195];     // 輸送帶 奶油燕麥
+const THEME_CONVEYOR_BORDER = [180, 170, 155];
+const THEME_CONVEYOR_TEXT = [80, 70, 60];
+const THEME_HISTORY_BG = [230, 222, 210];   // 已交換區背景
+const THEME_HISTORY_TEXT = [100, 90, 80];   // 已交換區/標題文字
+const THEME_HISTORY_TEXT_SOFT = [140, 130, 118];
+const THEME_TEXT_SOFT = [120, 110, 100];    // 一般說明 柔灰褐
+const THEME_TEXT_DARK = [80, 70, 60];       // 標題/深字 深褐
+const THEME_ACCENT = [255, 200, 180];       // 按鈕/高亮 蜜桃
+const THEME_ACCENT_BORDER = [230, 175, 155];
+const THEME_SEPARATOR = [220, 205, 190];    // 分隔線 柔和
+const THEME_OVERLAY = [40, 35, 30];         // 結果遮罩 暖褐 (RGBA 自填 alpha)
+const THEME_CELEBRATION_OVERLAY = [60, 50, 45]; // 慶祝遮罩
+
 let cells;           // [ [], [], ... ] 共 9 櫃，每櫃 3 格為 { typeIndex, displayX, displayY }[]
 let draggedItem;     // { cellIndex, slotIndex, typeIndex, offsetX, offsetY } | null
 let dragX, dragY;     // 當前拖動時物品繪製位置（pointer - offset）
@@ -323,9 +346,9 @@ let erikaCelebrationWrap = null;  // 過場時顯示的えりか風格 CSS 角�
 function createConfettiParticles() {
   const particles = [];
   const colors = [
-    [255, 107, 107], [255, 159, 67], [255, 205, 57], [129, 199, 132],
-    [77, 208, 225], [149, 117, 205], [239, 83, 80], [255, 235, 59],
-    [76, 175, 80], [33, 150, 243], [156, 39, 176], [255, 152, 0]
+    [255, 220, 200], [200, 235, 220], [255, 235, 210], [220, 240, 200],
+    [255, 215, 180], [230, 245, 230], [255, 230, 220], [240, 220, 200],
+    [210, 230, 220], [255, 225, 195], [220, 235, 210], [250, 235, 215]
   ];
   const cx = width / 2;
   const topY = height * 0.15;
@@ -452,16 +475,16 @@ function drawLevelCompleteCelebrationOverlay() {
   const progress = Math.min(1, t / duration);
 
   push();
-  fill(0, 0, 0, 100);
+  fill(THEME_CELEBRATION_OVERLAY[0], THEME_CELEBRATION_OVERLAY[1], THEME_CELEBRATION_OVERLAY[2], 140);
   noStroke();
   rect(0, 0, width, height);
-  fill(255);
+  fill(255, 248, 235);
   textAlign(CENTER, CENTER);
   textSize(Math.min(42, width * 0.1));
   text('恭喜過關！', width / 2, height * 0.28);
   const groupName = LEVEL_GROUPS[levelCompleteCelebration.completedLevel] || '—';
   textSize(Math.min(24, width * 0.055));
-  fill(255, 235, 59);
+  fill(255, 230, 200);
   text(groupName + ' 完成', width / 2, height * 0.36);
   pop();
 
@@ -731,11 +754,47 @@ function setReplayButtonRect() {
   };
 }
 
+function drawThemeBackground() {
+  const ctx = drawingContext;
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, 'rgb(' + THEME_BG[0] + ',' + THEME_BG[1] + ',' + THEME_BG[2] + ')');
+  g.addColorStop(1, 'rgb(' + THEME_BG_BOTTOM[0] + ',' + THEME_BG_BOTTOM[1] + ',' + THEME_BG_BOTTOM[2] + ')');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, width, height);
+}
+
+// 小動物療癒風：角落輕量爪印裝飾（不影響點擊）
+function drawPawPrint(px, py, size, alpha, flip) {
+  push();
+  noStroke();
+  fill(THEME_TEXT_SOFT[0], THEME_TEXT_SOFT[1], THEME_TEXT_SOFT[2], alpha);
+  translate(px, py);
+  if (flip) scale(-1, 1);
+  const r = size * 0.5;
+  ellipse(0, size * 0.35, r * 1.4, r * 1.1);
+  ellipse(-size * 0.28, -size * 0.05, r * 0.5, r * 0.65);
+  ellipse(size * 0.28, -size * 0.05, r * 0.5, r * 0.65);
+  ellipse(-size * 0.35, -size * 0.35, r * 0.45, r * 0.6);
+  ellipse(size * 0.35, -size * 0.35, r * 0.45, r * 0.6);
+  pop();
+}
+
+function drawThemeDecorations() {
+  const pad = 28;
+  const sz = 22;
+  const alpha = 55;
+  drawPawPrint(pad, pad, sz, alpha, false);
+  drawPawPrint(width - pad, pad, sz, alpha, true);
+  drawPawPrint(pad, height - pad, sz, alpha, true);
+  drawPawPrint(width - pad, height - pad, sz, alpha, false);
+}
+
 function draw() {
   // 每幀都檢查過關（9 櫃每櫃 3 格全部同一種才過關），避免漏判
   if (cells) checkWin();
 
-  background(26, 26, 46);
+  drawThemeBackground();
+  drawThemeDecorations();
 
   // 拖動時每 frame 用當前 pointer 更新位置，並算出滑過哪個物品（亮外框用）
   if (draggedItem !== null) {
@@ -802,13 +861,13 @@ function draw() {
 
 function drawSwapZone() {
   if (!swapZone) return;
-  // 青綠色背景（圓角矩形）
-  fill(72, 209, 204);  // 青綠色 medium turquoise
+  // 薄荷綠背景（圓角矩形）
+  fill(THEME_SWAP_ZONE[0], THEME_SWAP_ZONE[1], THEME_SWAP_ZONE[2]);
   noStroke();
   rect(swapZone.x, swapZone.y, swapZone.w, swapZone.h, 10);
   // 兩格：較深邊框區分
-  fill(255, 255, 255, 35);
-  stroke(52, 160, 155);
+  fill(255, 255, 255, 40);
+  stroke(THEME_SWAP_ZONE_BORDER[0], THEME_SWAP_ZONE_BORDER[1], THEME_SWAP_ZONE_BORDER[2]);
   strokeWeight(2);
   for (let i = 0; i < SWAP_ZONE_SLOTS; i++) {
     const cen = getSwapZoneSlotCenter(i);
@@ -819,7 +878,7 @@ function drawSwapZone() {
   }
   noStroke();
   // 標籤「交換區」在區域上方
-  fill(30, 50, 50);
+  fill(THEME_SWAP_ZONE_TEXT[0], THEME_SWAP_ZONE_TEXT[1], THEME_SWAP_ZONE_TEXT[2]);
   textAlign(CENTER, BOTTOM);
   textSize(Math.min(15, swapZone.w * 0.11));
   text('交換區', swapZone.x + swapZone.w / 2, swapZone.y + swapZone.pad - 2);
@@ -844,7 +903,7 @@ function drawSwapZone() {
       }
     }
     if (str) {
-      fill(20, 40, 45);
+      fill(THEME_SWAP_ZONE_TEXT[0], THEME_SWAP_ZONE_TEXT[1], THEME_SWAP_ZONE_TEXT[2]);
       text(str, cen.x, cen.y);
     }
   }
@@ -861,12 +920,12 @@ function drawConveyorBelt() {
   const segY = conveyorZone.y + conveyorZone.h / 2;
   const nextLevelSegmentIndex = 0;  // 只顯示「下一關」為清晰，其餘打馬賽克（模糊）
 
-  // 輸送帶背景（淺棕色）
-  fill(180, 165, 140);
+  // 輸送帶背景（奶油燕麥色）
+  fill(THEME_CONVEYOR[0], THEME_CONVEYOR[1], THEME_CONVEYOR[2]);
   noStroke();
   rect(conveyorZone.x, conveyorZone.y, conveyorZone.w, conveyorZone.h, 8);
   // 標題「輸送帶」
-  fill(40, 35, 30);
+  fill(THEME_CONVEYOR_TEXT[0], THEME_CONVEYOR_TEXT[1], THEME_CONVEYOR_TEXT[2]);
   textAlign(LEFT, CENTER);
   textSize(Math.min(14, conveyorZone.w * 0.032));
   text('輸送帶', conveyorZone.x + pad, conveyorZone.y + conveyorZone.h / 2);
@@ -884,19 +943,19 @@ function drawConveyorBelt() {
     if (cacheInvalid) {
       if (conveyorCachedBlur.pg) conveyorCachedBlur.pg.remove();
       const pg = createGraphics(expectedBufW, expectedBufH);
-      pg.background(180, 165, 140);
+      pg.background(THEME_CONVEYOR[0], THEME_CONVEYOR[1], THEME_CONVEYOR[2]);
       pg.noStroke();
       const blurAmount = 4;
       for (let i = 1; i < conveyorZone.segmentCount; i++) {
         const idx = currentLevel + 1 + i;
         const label = idx < LEVEL_GROUPS.length ? LEVEL_GROUPS[idx] : '—';
         const rx = (i - 1) * (segW + gap);
-        pg.fill(255, 255, 255, 60);
-        pg.stroke(100, 90, 70);
+        pg.fill(255, 255, 255, 55);
+        pg.stroke(THEME_CONVEYOR_BORDER[0], THEME_CONVEYOR_BORDER[1], THEME_CONVEYOR_BORDER[2]);
         pg.strokeWeight(2);
         pg.rect(rx, 0, segW, segH, 6);
         pg.noStroke();
-        pg.fill(50, 45, 40);
+        pg.fill(THEME_CONVEYOR_TEXT[0], THEME_CONVEYOR_TEXT[1], THEME_CONVEYOR_TEXT[2]);
         pg.textAlign(CENTER, CENTER);
         pg.textSize(Math.min(16, segW * 0.2));
         pg.text(label, rx + segW / 2, segH / 2);
@@ -915,12 +974,12 @@ function drawConveyorBelt() {
   const idx = currentLevel + 1 + i;
   const label = idx < LEVEL_GROUPS.length ? LEVEL_GROUPS[idx] : '—';
   const rx = segX0 + i * (segW + gap);
-  fill(255, 255, 255, 60);
-  stroke(100, 90, 70);
+  fill(255, 255, 255, 55);
+  stroke(THEME_CONVEYOR_BORDER[0], THEME_CONVEYOR_BORDER[1], THEME_CONVEYOR_BORDER[2]);
   strokeWeight(2);
   rect(rx, segY0, segW, segH, 6);
   noStroke();
-  fill(50, 45, 40);
+  fill(THEME_CONVEYOR_TEXT[0], THEME_CONVEYOR_TEXT[1], THEME_CONVEYOR_TEXT[2]);
   textAlign(CENTER, CENTER);
   textSize(Math.min(16, segW * 0.2));
   text(label, rx + segW / 2, segY);
@@ -928,22 +987,22 @@ function drawConveyorBelt() {
 
 function drawSwapHistoryZone() {
   if (!swapHistoryZone) return;
-  // 背景（較深色區分）
-  fill(45, 55, 75);
+  // 背景（暖灰褐區分）
+  fill(THEME_HISTORY_BG[0], THEME_HISTORY_BG[1], THEME_HISTORY_BG[2]);
   noStroke();
   rect(swapHistoryZone.x, swapHistoryZone.y, swapHistoryZone.w, swapHistoryZone.h, 8);
   // 標題
-  fill(200, 210, 220);
+  fill(THEME_HISTORY_TEXT[0], THEME_HISTORY_TEXT[1], THEME_HISTORY_TEXT[2]);
   textAlign(LEFT, TOP);
   textSize(Math.min(14, swapHistoryZone.w * 0.035));
   text('已交換區', swapHistoryZone.x + swapHistoryZone.pad, swapHistoryZone.y + swapHistoryZone.pad);
   // 列出實際交換：櫃X 格Y ↔ 櫃X 格Y（由舊到新，每行一筆）
   if (swapHistory.length === 0) {
-    fill(120, 130, 140);
+    fill(THEME_HISTORY_TEXT_SOFT[0], THEME_HISTORY_TEXT_SOFT[1], THEME_HISTORY_TEXT_SOFT[2]);
     textSize(Math.min(11, swapHistoryZone.w * 0.028));
     text('（尚無交換）', swapHistoryZone.x + swapHistoryZone.pad, swapHistoryZone.y + swapHistoryZone.pad + swapHistoryZone.lineHeight);
   } else {
-    fill(180, 190, 200);
+    fill(THEME_HISTORY_TEXT[0], THEME_HISTORY_TEXT[1], THEME_HISTORY_TEXT[2]);
     textSize(Math.min(11, swapHistoryZone.w * 0.028));
     const startY = swapHistoryZone.y + swapHistoryZone.pad + swapHistoryZone.lineHeight;
     for (let i = 0; i < swapHistory.length; i++) {
@@ -1037,9 +1096,9 @@ function logDebugToConsole() {
   console.log('[Debug]\n' + getDebugPanelText());
 }
 
-// 白色分隔線：3×3 書櫃網格（水平 4 條、垂直 2 條）
+// 柔和分隔線：3×3 書櫃網格（水平 4 條、垂直 2 條）
 function drawShelfSeparators() {
-  stroke(255, 255, 255);
+  stroke(THEME_SEPARATOR[0], THEME_SEPARATOR[1], THEME_SEPARATOR[2]);
   strokeWeight(2);
   noFill();
   // 水平線：每列上緣 + 最底
@@ -1066,11 +1125,11 @@ function drawShelves() {
     const cellRow = floor(c / GRID_COLS);
     const x = cellCol * cellW;
     const y = shelfY + cellRow * cellH;
-    fill(94, 69, 52);
-    rect(x + 4, y, cellW - 8, cellH - 4, 8);
-    fill(139, 90, 43);
-    rect(x + 8, y + 6, cellW - 16, cellH - 16, 4);
-    fill(60, 45, 35);
+    fill(THEME_SHELF_FRAME[0], THEME_SHELF_FRAME[1], THEME_SHELF_FRAME[2]);
+    rect(x + 4, y, cellW - 8, cellH - 4, 10);
+    fill(THEME_SHELF_INNER[0], THEME_SHELF_INNER[1], THEME_SHELF_INNER[2]);
+    rect(x + 8, y + 6, cellW - 16, cellH - 16, 6);
+    fill(THEME_SHELF_SLOT[0], THEME_SHELF_SLOT[1], THEME_SHELF_SLOT[2]);
     const baseX = x + pad;
     const baseY = y + pad;
     for (let s = 0; s < ITEMS_PER_CELL; s++) {
@@ -1080,7 +1139,7 @@ function drawShelves() {
       const sy = baseY + row * (slotH + gap) + slotH / 2;
       ellipse(sx, sy, slotW * 0.85, slotH * 0.85);
     }
-    fill(255);
+    fill(THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]);
     textAlign(CENTER, BOTTOM);
     textSize(Math.min(14, cellW * 0.12));
     text('櫃' + c, x + cellW / 2, y - 2);
@@ -1147,11 +1206,11 @@ function drawDragOrbitPlanets(cx, cy) {
     ? [{ radius: 42, speed: 1, n: 2 }, { radius: 62, speed: -0.7, n: 3 }]
     : [{ radius: 38, speed: 1, n: 3 }, { radius: 54, speed: -0.72, n: 4 }, { radius: 72, speed: 0.48, n: 2 }];
   const planetColors = [
-    [255, 220, 120],
-    [120, 230, 255],
-    [255, 160, 200],
-    [190, 255, 160],
-    [255, 200, 130]
+    [255, 220, 200],
+    [200, 235, 220],
+    [255, 230, 210],
+    [220, 240, 200],
+    [255, 215, 180]
   ];
   noFill();
   for (let o = 0; o < orbits.length; o++) {
@@ -1430,10 +1489,10 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   }
   fill(t.color[0], t.color[1], t.color[2]);
   if (isHighlight) {
-    stroke(255, 220, 80);
+    stroke(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2]);
     strokeWeight(4);
   } else {
-    stroke(40);
+    stroke(THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]);
     strokeWeight(isDragging ? 3 : 1.5);
   }
   rectMode(CENTER);
@@ -1456,7 +1515,7 @@ function drawTimer() {
   const elapsed = gameState === 'completed'
     ? (endTime - startTime) / 1000
     : (millis() - startTime) / 1000;
-  fill(255);
+  fill(THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]);
   noStroke();
   textAlign(LEFT, TOP);
   textSize(Math.min(28, width * 0.06));
@@ -1466,7 +1525,7 @@ function drawTimer() {
 function drawWinConditionHint() {
   const levelIndices = getLevelTypeIndices(currentLevel);
   const names = levelIndices.map(function (i) { return ITEM_TYPES[i].name; }).join('、');
-  fill(200, 220, 255);
+  fill(THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]);
   noStroke();
   textAlign(LEFT, TOP);
   textSize(Math.min(14, width * 0.03));
@@ -1489,7 +1548,7 @@ function drawShelfCompletionOnScreen() {
       if (idx >= 0) counts[idx]++;
     }
     const same = (counts[0] === ITEMS_PER_CELL || counts[1] === ITEMS_PER_CELL || counts[2] === ITEMS_PER_CELL);
-    fill(same ? 120 : 255, same ? 255 : 200, same ? 120 : 200);
+    fill(same ? 100 : THEME_TEXT_DARK[0], same ? 180 : THEME_TEXT_DARK[1], same ? 140 : THEME_TEXT_DARK[2]);
     const n0 = ITEM_TYPES[levelIndices[0]].name;
     const n1 = ITEM_TYPES[levelIndices[1]].name;
     const n2 = ITEM_TYPES[levelIndices[2]].name;
@@ -1500,7 +1559,7 @@ function drawShelfCompletionOnScreen() {
 }
 
 function drawResultOverlay() {
-  fill(0, 0, 0, 180);
+  fill(THEME_OVERLAY[0], THEME_OVERLAY[1], THEME_OVERLAY[2], 160);
   rect(0, 0, width, height);
   fill(255);
   textAlign(CENTER, CENTER);
@@ -1510,8 +1569,8 @@ function drawResultOverlay() {
   const sec = ((endTime - startTime) / 1000).toFixed(1);
   text('耗時 ' + sec + ' 秒', width / 2, height * 0.5);
 
-  fill(52, 152, 219);
-  stroke(255);
+  fill(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2]);
+  stroke(THEME_ACCENT_BORDER[0], THEME_ACCENT_BORDER[1], THEME_ACCENT_BORDER[2]);
   strokeWeight(2);
   rect(replayBtn.x, replayBtn.y, replayBtn.w, replayBtn.h, 8);
   noStroke();
