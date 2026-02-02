@@ -169,13 +169,15 @@ const SLAB_LEVEL_FIRST = 23;   // awe1 的 level index
 const SLAB_LEVEL_LAST = 32;   // awe10 的 level index
 const LOCAL_STORAGE_KEY_USED_SLAB = 'shelfGame_usedSlabIcons';
 const FONT_AWESOME_SVG_BASE = 'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/svgs/solid/';
-// CDN 載入失敗時用的內嵌 SVG（star、heart、bolt），確保每關一定有三種圖示
-var SLAB_FALLBACK_SVGS;
+// Font Awesome 圖示填色：取代預設黑色，用漸層三色依序套用（粉、金、藍）
+const SLAB_ICON_FILL_COLORS = ['#ff6f91', '#ffc75f', '#4d96ff'];
+// CDN 載入失敗時用的內嵌 SVG（star、heart、bolt），載入時會套用 SLAB_ICON_FILL_COLORS
+var SLAB_FALLBACK_SVG_STRINGS;
 (function () {
   var star = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><path fill="currentColor" d="M316.9 18C311.6 7 300.4 0 288.1 0s-23.4 7-28.6 18L195 150.3 51.4 171.5c-12 1.8-22 10.2-25.7 21.7s-.7 24.2 7.9 32.7L137.8 329 113.2 474.7c-2 12 3 24.2 12.9 31.3s23 8 33.8 2.3l128.3-68.5 128.3 68.5c10.8 5.7 23.9 4.9 33.8-2.3s14.9-19.3 12.9-31.3L438.5 329 542.7 225.9c8.6-8.5 11.7-21.2 7.9-32.7s-13.7-19.9-25.7-21.7L381.2 150.3 316.9 18z"/></svg>';
   var heart = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path fill="currentColor" d="M47.6 300.4L228.3 469.1c7.5 7 17.4 10.9 27.7 10.9s20.2-3.9 27.7-10.9L464.4 300.4c31.9-29.7 31.9-79.1 0-108.9c-30.9-28.9-80.8-28.9-111.7 0L256 265.2 159.1 191.5c-30.9-28.9-80.8-28.9-111.7 0c-31.9 29.7-31.9 79.1 0 108.9z"/></svg>';
   var bolt = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><path fill="currentColor" d="M349.4 44.6c5.9-13.7 1.5-29.7-10.6-38.5s-28.6-8-39.9-1.8l-128 64C141.2 76.6 128 97.1 128 120v192c0 13.3 10.7 24 24 24h128v96c0 17.7 14.3 32 32 32s32-14.3 32-32V352 120c0-22.9-13.2-43.4-31.5-53.2l128-64c11.3-5.6 24.2-5.4 35.3 .6s16.5 24.8 10.6 38.5z"/></svg>';
-  SLAB_FALLBACK_SVGS = ['data:image/svg+xml,' + encodeURIComponent(star), 'data:image/svg+xml,' + encodeURIComponent(heart), 'data:image/svg+xml,' + encodeURIComponent(bolt)];
+  SLAB_FALLBACK_SVG_STRINGS = [star, heart, bolt];
 })();
 let slabIconNamesByLevel = {};   // key = level index 23..32，value = [name0, name1, name2]（已用圖示會記錄在 localStorage）
 let slabImagesByLevel = {};     // key = level index 23..32，value = [img0, img1, img2]
@@ -260,10 +262,14 @@ function ensureSlabIconsForLevel(levelIndex) {
     (function (j) {
       const name = slabIconNamesByLevel[levelIndex][j];
       const url = FONT_AWESOME_SVG_BASE + name + '.svg';
+      const fillColor = SLAB_ICON_FILL_COLORS[j % SLAB_ICON_FILL_COLORS.length];
       fetch(url, { mode: 'cors' })
-        .then(function (r) { return r.ok ? r.blob() : Promise.reject(); })
-        .then(function (blob) {
-          const blobUrl = URL.createObjectURL(blob);
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+        .then(function (svgText) {
+          var colored = svgText.replace(/\bfill="[^"]*"/gi, 'fill="' + fillColor + '"').replace(/\bfill:\s*currentColor\b/gi, 'fill:' + fillColor);
+          if (colored === svgText) colored = svgText.replace(/<path /i, '<path fill="' + fillColor + '" ');
+          var blob = new Blob([colored], { type: 'image/svg+xml;charset=utf-8' });
+          var blobUrl = URL.createObjectURL(blob);
           loadImage(blobUrl, function (img) {
             if (img && slabImagesByLevel[levelIndex] && j >= 0 && j <= 2) slabImagesByLevel[levelIndex][j] = img;
             URL.revokeObjectURL(blobUrl);
@@ -286,7 +292,11 @@ function ensureAllSlabLevelsReady() {
         (function (lev, j) {
           const current = slabImagesByLevel[lev][j];
           if (!current || (typeof current.width === 'number' && current.width <= 0)) {
-            loadImage(SLAB_FALLBACK_SVGS[j], function (img) {
+            const fillColor = SLAB_ICON_FILL_COLORS[j % SLAB_ICON_FILL_COLORS.length];
+            const rawSvg = SLAB_FALLBACK_SVG_STRINGS[j];
+            const coloredSvg = rawSvg.replace(/\bfill="currentColor"/gi, 'fill="' + fillColor + '"');
+            const dataUri = 'data:image/svg+xml,' + encodeURIComponent(coloredSvg);
+            loadImage(dataUri, function (img) {
               if (img && slabImagesByLevel[lev] && j >= 0 && j <= 2) slabImagesByLevel[lev][j] = img;
             });
           }
