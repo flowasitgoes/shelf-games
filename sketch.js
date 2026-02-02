@@ -207,8 +207,13 @@ const NUM_LEVELS = 98;      // 關卡數（…Avatars, awe1～awe30, Avatars 54�
 // --- 小動物療癒風主題色（暖米/奶油/薄荷/蜜桃）---
 const THEME_BG = [250, 245, 235];           // 畫布背景 暖米
 const THEME_BG_BOTTOM = [245, 238, 225];    // 漸層底 稍深米
-const THEME_SHELF_FRAME = [180, 155, 130];  // 書櫃外框 暖木
-const THEME_SHELF_INNER = [200, 178, 150];  // 書櫃內底
+const THEME_SHELF_FRAME = [180, 155, 130];  // 書櫃外框 暖木（備用）
+const THEME_SHELF_INNER = [200, 178, 150];  // 書櫃內底（備用）
+// 櫃 0～櫃 8 lofi 紫羅蘭＋玻璃感（參考 lg-bg-color / glass-overlay / glass-specular）
+const THEME_SHELF_LAVENDER_BORDER = [195, 175, 215];   // 淡淡紫羅蘭邊框（外層與內層一致）
+const THEME_SHELF_GLASS_OUTER = [230, 215, 245];       // 外層「環」：偏白紫、高透（對應 lg-bg ~0.25）
+const THEME_SHELF_GLASS_INNER = [245, 238, 252];       // 內層卡片：更透明白紫（玻璃感更強）
+const THEME_SHELF_GLASS_HIGHLIGHT = [255, 255, 255];   // 玻璃高光（對應 lg-highlight 內緣反光）
 const THEME_SHELF_SLOT = [140, 120, 100];   // 格洞
 const THEME_SWAP_ZONE = [180, 220, 210];    // 交換區 薄荷綠
 const THEME_SWAP_ZONE_BORDER = [140, 185, 175];
@@ -226,6 +231,9 @@ const THEME_ACCENT_BORDER = [230, 175, 155];
 const THEME_SEPARATOR = [220, 205, 190];    // 分隔線 柔和
 const THEME_OVERLAY = [40, 35, 30];         // 結果遮罩 暖褐 (RGBA 自填 alpha)
 const THEME_CELEBRATION_OVERLAY = [60, 50, 45]; // 慶祝遮罩
+// 畫布背景圖 + overlay（讓背景圖不要那麼明顯）
+let bgImage = null;
+const THEME_BG_OVERLAY_ALPHA = 30;         // overlay 不透明度（0～255，愈大背景圖愈淡）
 
 let cells;           // [ [], [], ... ] 共 9 櫃，每櫃 3 格為 { typeIndex, displayX, displayY }[]
 let draggedItem;     // { cellIndex, slotIndex, typeIndex, offsetX, offsetY } | null
@@ -989,9 +997,9 @@ function enableSound() {
       if (soundBarDiv && soundBarDiv.elt) {
         const btn = soundBarDiv.elt.querySelector('button');
         if (btn) {
-          btn.textContent = '音效已開啟';
-          btn.disabled = true;
-          btn.style.opacity = '0.7';
+          btn.textContent = '🔊';
+          btn.disabled = false;
+          btn.style.opacity = '1';
         }
       }
     };
@@ -1016,6 +1024,7 @@ function preload() {
       avatarImagesByLevel[level][i] = loadImage(urls[i]);
     }
   }
+  bgImage = loadImage('public/background-theme.png');
 }
 
 function setup() {
@@ -1028,10 +1037,19 @@ function setup() {
   soundBarDiv.class('sound-bar');
   soundBarDiv.parent(soundAndCanvas);
 
-  const btn = createButton('開啟音效');
+  const btn = createButton('🔇');
   btn.class('sound-toggle-btn');
   btn.parent(soundBarDiv);
-  btn.elt.addEventListener('click', function () { enableSound(); });
+  btn.elt.addEventListener('click', function () {
+    if (soundEnabled) {
+      soundEnabled = false;
+      btn.elt.textContent = '🔇';
+      btn.elt.style.opacity = '1';
+      btn.elt.disabled = false;
+    } else {
+      enableSound();
+    }
+  });
 
   // 邊框參數 UI（weave 風格，可即時調整 #game-container 邊框）- 已關閉
   // (function () {
@@ -1175,21 +1193,21 @@ function computeLayout() {
   shelfH = height * 0.55;
   shelfY = height * 0.22;
   cellH = shelfH / GRID_ROWS;
-  // 右上角交換區：寬約 26% 畫布，高約 18%，內有兩格
+  // 右上角交換區：寬約 26% 畫布，高約 18%，內有兩格 —— 已註解
   const margin = Math.min(width * 0.02, 12);
-  const zoneW = width * 0.26;
-  const zoneH = height * 0.18;
-  swapZone = {
-    x: width - zoneW - margin,
-    y: margin,
-    w: zoneW,
-    h: zoneH,
-    gap: Math.min(10, zoneW * 0.08),
-    pad: Math.min(12, zoneW * 0.06)
-  };
-  const innerW = swapZone.w - 2 * swapZone.pad;
-  swapZone.slotW = (innerW - swapZone.gap) / SWAP_ZONE_SLOTS;
-  swapZone.slotH = swapZone.h - 2 * swapZone.pad;
+  // const zoneW = width * 0.26;
+  // const zoneH = height * 0.18;
+  // swapZone = {
+  //   x: width - zoneW - margin,
+  //   y: margin,
+  //   w: zoneW,
+  //   h: zoneH,
+  //   gap: Math.min(10, zoneW * 0.08),
+  //   pad: Math.min(12, zoneW * 0.06)
+  // };
+  // const innerW = swapZone.w - 2 * swapZone.pad;
+  // swapZone.slotW = (innerW - swapZone.gap) / SWAP_ZONE_SLOTS;
+  // swapZone.slotH = swapZone.h - 2 * swapZone.pad;
 
   // 最下面：已交換區（顯示實際發生過的交換）—— 已註解
   // const historyZoneH = Math.min(height * 0.14, 80);
@@ -1330,12 +1348,26 @@ function setReplayButtonRect() {
 }
 
 function drawThemeBackground() {
-  const ctx = drawingContext;
-  const g = ctx.createLinearGradient(0, 0, 0, height);
-  g.addColorStop(0, 'rgb(' + THEME_BG[0] + ',' + THEME_BG[1] + ',' + THEME_BG[2] + ')');
-  g.addColorStop(1, 'rgb(' + THEME_BG_BOTTOM[0] + ',' + THEME_BG_BOTTOM[1] + ',' + THEME_BG_BOTTOM[2] + ')');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, width, height);
+  if (bgImage && bgImage.width > 0) {
+    // 背景圖 cover：等比例縮放填滿畫布，置中
+    const imgW = bgImage.width;
+    const imgH = bgImage.height;
+    const scale = max(width / imgW, height / imgH);
+    const drawW = imgW * scale;
+    const drawH = imgH * scale;
+    image(bgImage, (width - drawW) / 2, (height - drawH) / 2, drawW, drawH);
+    // overlay：半透明暖米色，讓背景圖不要那麼明顯
+    noStroke();
+    fill(THEME_BG[0], THEME_BG[1], THEME_BG[2], THEME_BG_OVERLAY_ALPHA);
+    rect(0, 0, width, height);
+  } else {
+    const ctx = drawingContext;
+    const g = ctx.createLinearGradient(0, 0, 0, height);
+    g.addColorStop(0, 'rgb(' + THEME_BG[0] + ',' + THEME_BG[1] + ',' + THEME_BG[2] + ')');
+    g.addColorStop(1, 'rgb(' + THEME_BG_BOTTOM[0] + ',' + THEME_BG_BOTTOM[1] + ',' + THEME_BG_BOTTOM[2] + ')');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, width, height);
+  }
 }
 
 // 小動物療癒風：角落輕量爪印裝飾（不影響點擊）
@@ -1393,7 +1425,7 @@ function draw() {
   }
   drawShelves();
   drawShelfSeparators();
-  drawSwapZone();
+  // drawSwapZone();  // 右上角交換區已註解
   drawConveyorBelt();
   // drawSwapHistoryZone();  // 已交換區已註解
   // 拖動時畫出可放置的格子範圍（方便除錯）
@@ -1695,16 +1727,40 @@ function drawShelves() {
   const gap = 6;
   const slotW = (cellW - 2 * pad - (SLOTS_GRID_COLS - 1) * gap) / SLOTS_GRID_COLS;
   const slotH = (cellH - 2 * pad - (SLOTS_GRID_ROWS - 1) * gap) / SLOTS_GRID_ROWS;
-  noStroke();
+  const L = THEME_SHELF_LAVENDER_BORDER;
+  const G_OUT = THEME_SHELF_GLASS_OUTER;
+  const G_IN = THEME_SHELF_GLASS_INNER;
+  const H = THEME_SHELF_GLASS_HIGHLIGHT;
+  // 對應 CSS --lg-bg-color: rgba(255,255,255,0.25)，加強透明感
+  const ALPHA_OUTER = 64;   // ~0.25
+  const ALPHA_INNER = 51;   // ~0.2，內層更透
+  const ALPHA_SPECULAR = 191; // ~0.75 高光
   for (let c = 0; c < NUM_CELLS; c++) {
     const cellCol = c % GRID_COLS;
     const cellRow = floor(c / GRID_COLS);
     const x = cellCol * cellW;
     const y = shelfY + cellRow * cellH;
-    fill(THEME_SHELF_FRAME[0], THEME_SHELF_FRAME[1], THEME_SHELF_FRAME[2]);
+    // 外層：淡淡紫羅蘭邊框 ＋ 高透明紫白（玻璃 overlay 感）
+    fill(G_OUT[0], G_OUT[1], G_OUT[2], ALPHA_OUTER);
+    stroke(L[0], L[1], L[2]);
+    strokeWeight(2);
     rect(x + 4, y, cellW - 8, cellH - 4, 10);
-    fill(THEME_SHELF_INNER[0], THEME_SHELF_INNER[1], THEME_SHELF_INNER[2]);
+    // 內層：淡淡紫羅蘭邊框 ＋ 更高透明粉白（玻璃感）
+    fill(G_IN[0], G_IN[1], G_IN[2], ALPHA_INNER);
+    stroke(L[0], L[1], L[2]);
+    strokeWeight(2);
     rect(x + 8, y + 6, cellW - 16, cellH - 16, 6);
+    // glass-specular：內緣高光（inset 1px 1px 0 highlight）
+    noFill();
+    stroke(H[0], H[1], H[2], ALPHA_SPECULAR);
+    strokeWeight(1);
+    const ix = x + 9;
+    const iy = y + 7;
+    const iw = cellW - 18;
+    const ih = cellH - 18;
+    line(ix, iy, ix + iw, iy);
+    line(ix, iy, ix, iy + ih);
+    noStroke();
     fill(THEME_SHELF_SLOT[0], THEME_SHELF_SLOT[1], THEME_SHELF_SLOT[2]);
     const baseX = x + pad;
     const baseY = y + pad;
@@ -1721,6 +1777,7 @@ function drawShelves() {
     // textSize(Math.min(14, cellW * 0.12));
     // text('櫃' + c, x + cellW / 2, y - 2);
   }
+  noStroke();
 }
 
 function drawItems() {
