@@ -169,9 +169,19 @@ const SLAB_LEVEL_FIRST = 23;   // awe1 的 level index
 const SLAB_LEVEL_LAST = 32;   // awe10 的 level index
 const LOCAL_STORAGE_KEY_USED_SLAB = 'shelfGame_usedSlabIcons';
 const FONT_AWESOME_SVG_BASE = 'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/svgs/solid/';
-// Font Awesome 圖示填色：取代預設黑色，用漸層三色依序套用（粉、金、藍）
-const SLAB_ICON_FILL_COLORS = ['#ff6f91', '#ffc75f', '#4d96ff'];
-// CDN 載入失敗時用的內嵌 SVG（star、heart、bolt），載入時會套用 SLAB_ICON_FILL_COLORS
+// Font Awesome 圖示填色：線性漸層 linear-gradient(#a500ff, #00ffa5)，紫到青綠
+const SLAB_ICON_GRADIENT_START = '#a500ff';
+const SLAB_ICON_GRADIENT_END = '#00ffa5';
+// 將 SVG 字串改為使用線性漸層填色（在 defs 加入 linearGradient，path 填 fill="url(#iconGrad)"）
+function applySvgLinearGradient(svgText, gradId) {
+  if (!gradId) gradId = 'iconGrad';
+  var defs = '<defs><linearGradient id="' + gradId + '" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="' + SLAB_ICON_GRADIENT_START + '"/><stop offset="100%" stop-color="' + SLAB_ICON_GRADIENT_END + '"/></linearGradient></defs>';
+  var inserted = svgText.replace(/<svg([^>]*)>/i, '<svg$1>' + defs);
+  var filled = inserted.replace(/\bfill="[^"]*"/gi, 'fill="url(#' + gradId + ')"').replace(/\bfill:\s*currentColor\b/gi, 'fill:url(#' + gradId + ')');
+  if (filled === inserted) filled = inserted.replace(/<path /i, '<path fill="url(#' + gradId + ')" ');
+  return filled;
+}
+// CDN 載入失敗時用的內嵌 SVG（star、heart、bolt），載入時會套用線性漸層
 var SLAB_FALLBACK_SVG_STRINGS;
 (function () {
   var star = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><path fill="currentColor" d="M316.9 18C311.6 7 300.4 0 288.1 0s-23.4 7-28.6 18L195 150.3 51.4 171.5c-12 1.8-22 10.2-25.7 21.7s-.7 24.2 7.9 32.7L137.8 329 113.2 474.7c-2 12 3 24.2 12.9 31.3s23 8 33.8 2.3l128.3-68.5 128.3 68.5c10.8 5.7 23.9 4.9 33.8-2.3s14.9-19.3 12.9-31.3L438.5 329 542.7 225.9c8.6-8.5 11.7-21.2 7.9-32.7s-13.7-19.9-25.7-21.7L381.2 150.3 316.9 18z"/></svg>';
@@ -262,13 +272,12 @@ function ensureSlabIconsForLevel(levelIndex) {
     (function (j) {
       const name = slabIconNamesByLevel[levelIndex][j];
       const url = FONT_AWESOME_SVG_BASE + name + '.svg';
-      const fillColor = SLAB_ICON_FILL_COLORS[j % SLAB_ICON_FILL_COLORS.length];
+      const gradId = 'iconGrad_' + levelIndex + '_' + j;
       fetch(url, { mode: 'cors' })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
         .then(function (svgText) {
-          var colored = svgText.replace(/\bfill="[^"]*"/gi, 'fill="' + fillColor + '"').replace(/\bfill:\s*currentColor\b/gi, 'fill:' + fillColor);
-          if (colored === svgText) colored = svgText.replace(/<path /i, '<path fill="' + fillColor + '" ');
-          var blob = new Blob([colored], { type: 'image/svg+xml;charset=utf-8' });
+          var withGradient = applySvgLinearGradient(svgText, gradId);
+          var blob = new Blob([withGradient], { type: 'image/svg+xml;charset=utf-8' });
           var blobUrl = URL.createObjectURL(blob);
           loadImage(blobUrl, function (img) {
             if (img && slabImagesByLevel[levelIndex] && j >= 0 && j <= 2) slabImagesByLevel[levelIndex][j] = img;
@@ -292,10 +301,9 @@ function ensureAllSlabLevelsReady() {
         (function (lev, j) {
           const current = slabImagesByLevel[lev][j];
           if (!current || (typeof current.width === 'number' && current.width <= 0)) {
-            const fillColor = SLAB_ICON_FILL_COLORS[j % SLAB_ICON_FILL_COLORS.length];
             const rawSvg = SLAB_FALLBACK_SVG_STRINGS[j];
-            const coloredSvg = rawSvg.replace(/\bfill="currentColor"/gi, 'fill="' + fillColor + '"');
-            const dataUri = 'data:image/svg+xml,' + encodeURIComponent(coloredSvg);
+            const withGradient = applySvgLinearGradient(rawSvg, 'fallbackGrad_' + lev + '_' + j);
+            const dataUri = 'data:image/svg+xml,' + encodeURIComponent(withGradient);
             loadImage(dataUri, function (img) {
               if (img && slabImagesByLevel[lev] && j >= 0 && j <= 2) slabImagesByLevel[lev][j] = img;
             });
