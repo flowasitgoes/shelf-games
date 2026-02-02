@@ -1033,6 +1033,45 @@ function setup() {
   btn.parent(soundBarDiv);
   btn.elt.addEventListener('click', function () { enableSound(); });
 
+  // 邊框參數 UI（weave 風格，可即時調整 #game-container 邊框）- 已關閉
+  // (function () {
+  //   const gc = document.getElementById('game-container');
+  //   if (!gc) return;
+  //   const wrap = createDiv('');
+  //   wrap.class('border-params-wrap');
+  //   wrap.parent(soundBarDiv);
+
+  //   function addParamRow(label, key, min, max, initial, unit, step) {
+  //     const row = createDiv('');
+  //     row.class('param-row');
+  //     row.parent(wrap);
+  //     const labelSpan = createSpan(label);
+  //     labelSpan.parent(row);
+  //     const slider = createSlider(min, max, initial, step || 1);
+  //     slider.parent(row);
+  //     const valueSpan = createSpan(String(initial) + (unit || ''));
+  //     valueSpan.class('param-value');
+  //     valueSpan.parent(row);
+  //     function apply() {
+  //       const v = slider.value();
+  //       valueSpan.elt.textContent = String(typeof v === 'number' ? (step === 1 ? Math.round(v) : v) : v) + (unit || '');
+  //       if (key === 'line') gc.style.setProperty('--game-border-line', v + 'px');
+  //       else if (key === 'size') gc.style.setProperty('--game-border-size', v + 'px');
+  //       else if (key === 'rotateBefore') gc.style.setProperty('--game-border-rotate-before', String(v));
+  //       else if (key === 'rotateAfter') gc.style.setProperty('--game-border-rotate-after', String(v));
+  //       else if (key === 'radiusDivisor') gc.style.setProperty('--game-border-radius-divisor', String(v));
+  //     }
+  //     slider.elt.addEventListener('input', apply);
+  //     return { slider, valueSpan, apply };
+  //   }
+
+  //   addParamRow('線粗', 'line', 2, 12, 5, 'px', 1);
+  //   addParamRow('星形', 'size', 12, 48, 27, 'px', 1);
+  //   addParamRow('旋轉前', 'rotateBefore', 0, 360, 180, '°', 1);
+  //   addParamRow('旋轉後', 'rotateAfter', 0, 360, 270, '°', 1);
+  //   addParamRow('圓角', 'radiusDivisor', 2, 6, 2, '', 1);
+  // })();
+
   // 54～98 關卡片底色灰階測試 UI（已關閉，改為固定 23% 灰階）
   // const grayWrap = createDiv('');
   // grayWrap.class('avatar-bg-gray-wrap');
