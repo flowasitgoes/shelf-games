@@ -168,6 +168,9 @@ const FONT_AWESOME_SLAB_ICONS = ['star', 'heart', 'bolt', 'fire', 'camera', 'mus
 const SLAB_LEVEL_FIRST = 23;   // awe1 的 level index
 const SLAB_LEVEL_LAST = 32;   // awe10 的 level index
 const LOCAL_STORAGE_KEY_USED_SLAB = 'shelfGame_usedSlabIcons';
+// awe1～awe10 關卡圖示清單：存 localStorage，重整後不變、利於快取。版本變更時會重新產生清單
+const AWE_LEVEL_ICONS_STORAGE_KEY = 'shelfGame_aweLevelIcons';
+const AWE_LEVEL_ICONS_VERSION = 1;
 const FONT_AWESOME_SVG_BASE = 'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/svgs/solid/';
 // Font Awesome 圖示填色：預設為多層灰階漸層（黑與白之間）；亦可使用雙色漸層
 const SLAB_ICON_GRADIENT_START = '#a500ff';
@@ -331,6 +334,41 @@ function clearUsedSlabIcons() {
   } catch (e) {}
 }
 
+// 從 localStorage 讀取 awe1～awe10 的圖示清單；格式 { version, levels: { "23": ["star","heart","bolt"], ... } }，缺漏或版本不符回傳 null
+function getAweLevelIconsFromStorage() {
+  try {
+    var raw = localStorage.getItem(AWE_LEVEL_ICONS_STORAGE_KEY);
+    if (!raw) return null;
+    var data = JSON.parse(raw);
+    if (!data || data.version !== AWE_LEVEL_ICONS_VERSION || !data.levels) return null;
+    var levels = data.levels;
+    for (var L = SLAB_LEVEL_FIRST; L <= SLAB_LEVEL_LAST; L++) {
+      var arr = levels[String(L)];
+      if (!Array.isArray(arr) || arr.length !== 3) return null;
+      for (var i = 0; i < 3; i++) {
+        if (typeof arr[i] !== 'string' || FONT_AWESOME_SLAB_ICONS.indexOf(arr[i]) === -1) return null;
+      }
+    }
+    return levels;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 將 slabIconNamesByLevel（僅 23..32）寫入 localStorage，含版本
+function saveAweLevelIconsToStorage() {
+  try {
+    var levels = {};
+    for (var L = SLAB_LEVEL_FIRST; L <= SLAB_LEVEL_LAST; L++) {
+      if (slabIconNamesByLevel[L] && Array.isArray(slabIconNamesByLevel[L]) && slabIconNamesByLevel[L].length === 3) {
+        levels[String(L)] = slabIconNamesByLevel[L].slice();
+      }
+    }
+    if (Object.keys(levels).length !== SLAB_LEVEL_LAST - SLAB_LEVEL_FIRST + 1) return;
+    localStorage.setItem(AWE_LEVEL_ICONS_STORAGE_KEY, JSON.stringify({ version: AWE_LEVEL_ICONS_VERSION, levels: levels }));
+  } catch (e) {}
+}
+
 // 從 FONT_AWESOME_SLAB_ICONS 中隨機選 3 個不同且尚未用過的圖示；若不足 3 個則清空已用記錄後再選
 function pickThreeSlabIcons() {
   const used = getUsedSlabIcons();
@@ -345,12 +383,15 @@ function pickThreeSlabIcons() {
   return chosen;
 }
 
-// 確保單一 awe 關卡（levelIndex 23..32）已選好 3 個圖示並開始載入；每關使用多層灰階漸層（黑與白之間），圖示共用該漸層
+// 確保單一 awe 關卡（levelIndex 23..32）已開始載入圖示；圖示名稱由 ensureAllSlabLevelsReady 從清單填入，此處只負責載入 SVG
 function ensureSlabIconsForLevel(levelIndex) {
-  if (slabIconNamesByLevel[levelIndex] != null) return;
-  slabIconNamesByLevel[levelIndex] = pickThreeSlabIcons();
-  slabGradientByLevel[levelIndex] = { stops: SLAB_ICON_GRADIENT_STOPS_PLATINUM, angleDeg: SLAB_ICON_GRADIENT_ANGLE_PLATINUM };
-  slabImagesByLevel[levelIndex] = [null, null, null];
+  if (slabIconNamesByLevel[levelIndex] == null) return;
+  if (slabGradientByLevel[levelIndex] == null) {
+    slabGradientByLevel[levelIndex] = { stops: SLAB_ICON_GRADIENT_STOPS_PLATINUM, angleDeg: SLAB_ICON_GRADIENT_ANGLE_PLATINUM };
+  }
+  if (slabImagesByLevel[levelIndex] == null) {
+    slabImagesByLevel[levelIndex] = [null, null, null];
+  }
   var grad = slabGradientByLevel[levelIndex];
   for (let i = 0; i < 3; i++) {
     (function (j) {
@@ -375,9 +416,22 @@ function ensureSlabIconsForLevel(levelIndex) {
   }
 }
 
-// 確保 awe1～awe10 共 10 關都選好圖示並開始載入；延遲 2.5 秒後對尚未載入成功的格子補上內嵌 SVG 備援
+// 確保 awe1～awe10 共 10 關都選好圖示並開始載入；清單存 localStorage，重整後不變、利於快取
 function ensureAllSlabLevelsReady() {
-  for (let L = SLAB_LEVEL_FIRST; L <= SLAB_LEVEL_LAST; L++) ensureSlabIconsForLevel(L);
+  var stored = getAweLevelIconsFromStorage();
+  if (stored) {
+    for (var L = SLAB_LEVEL_FIRST; L <= SLAB_LEVEL_LAST; L++) {
+      slabIconNamesByLevel[L] = stored[String(L)].slice();
+    }
+  } else {
+    for (var L = SLAB_LEVEL_FIRST; L <= SLAB_LEVEL_LAST; L++) {
+      slabIconNamesByLevel[L] = pickThreeSlabIcons();
+    }
+    saveAweLevelIconsToStorage();
+  }
+  for (var L = SLAB_LEVEL_FIRST; L <= SLAB_LEVEL_LAST; L++) {
+    ensureSlabIconsForLevel(L);
+  }
   if (slabFallbackTimeoutId) clearTimeout(slabFallbackTimeoutId);
   slabFallbackTimeoutId = setTimeout(function () {
     slabFallbackTimeoutId = null;
