@@ -312,6 +312,8 @@ let dragOrbitPhase = 0;   // 拖曳時軌道星球旋轉相位（每幀累加）
 const DRAG_ORBIT_SPEED = 0.08;
 const DROP_ANIMATION_DURATION_MS = 420;  // 放下時旋轉一圈＋飛行的時長
 let dropAnimation = null; // { startTime, startX, startY, endX, endY, typeIndex, placed, srcCell, srcSlot, targetCell, swapSlot, doSwap } 放開後飛行＋旋轉，結束時再執行實際放置
+// 效能：手機／低階裝置可設 true，減少粒子與 shadowBlur 以換取流暢度
+const ANIMATION_LITE = typeof navigator !== 'undefined' && (navigator.maxTouchPoints > 0 || (typeof window !== 'undefined' && window.innerWidth < 640));
 const DEBUG_PANEL_WIDTH = 280;
 let debugPanelEl = null;
 let gameCanvasWrapper = null;
@@ -1115,31 +1117,35 @@ function organicNoise(phase, index) {
   return (sin(phase * 1.37 + index * 2.1) * 0.5 + 0.5) * (0.6 + 0.4 * cos(phase * 0.83 + index));
 }
 
-// 拖曳時：星星環繞 + 光暈綻放（有機、帶亂數感）
+// 拖曳時：星星環繞 + 光暈綻放（有機、帶亂數感）。ANIMATION_LITE 時減少層數且不用 shadowBlur 以保流暢。
 function drawDragOrbitPlanets(cx, cy) {
   dragOrbitPhase += DRAG_ORBIT_SPEED;
   const phase = dragOrbitPhase;
   const t = millis() * 0.002;
+  const lite = ANIMATION_LITE;
+  const bloomCount = lite ? 4 : 6;
+  const useShadow = !lite;
 
-  // ---- 光暈綻放：多層橢圓，半徑與透明度隨時間「呼吸」，帶一點亂數感 ----
+  // ---- 光暈綻放：多層橢圓（不用 shadowBlur，手機上非常耗效能）----
   noStroke();
-  for (let i = 0; i < 8; i++) {
-    const breath = 0.75 + 0.35 * sin(t + i * 0.7) + 0.15 * organicNoise(phase, i);
-    const radius = (35 + i * 12 + 8 * sin(t * 1.2 + i * 0.5)) * breath;
-    const alpha = (12 + 14 * sin(t * 0.9 + i * 0.4) + 6 * organicNoise(phase, i + 10)) | 0;
+  for (let i = 0; i < bloomCount; i++) {
+    const breath = 0.75 + 0.35 * sin(t + i * 0.7) + (lite ? 0 : 0.15 * organicNoise(phase, i));
+    const radius = (35 + i * (lite ? 18 : 12) + (lite ? 4 : 8) * sin(t * 1.2 + i * 0.5)) * breath;
+    const alpha = (12 + 14 * sin(t * 0.9 + i * 0.4) + (lite ? 0 : 6 * organicNoise(phase, i + 10))) | 0;
     fill(255, 255, 255, Math.max(2, alpha));
-    drawingContext.shadowBlur = 20 + 15 * sin(t + i * 0.3);
-    drawingContext.shadowColor = 'rgba(255, 240, 220, 0.35)';
+    if (useShadow) {
+      drawingContext.shadowBlur = 18 + 12 * sin(t + i * 0.3);
+      drawingContext.shadowColor = 'rgba(255, 240, 220, 0.3)';
+    }
     ellipse(cx, cy, radius * 2, radius * 2);
+    if (useShadow) drawingContext.shadowBlur = 0;
   }
-  drawingContext.shadowBlur = 0;
+  if (useShadow) drawingContext.shadowBlur = 0;
 
-  // ---- 軌道線（輕微晃動，更有機） ----
-  const orbits = [
-    { radius: 38, speed: 1, n: 3 },
-    { radius: 54, speed: -0.72, n: 4 },
-    { radius: 72, speed: 0.48, n: 2 }
-  ];
+  // ---- 軌道線 + 小星球 ----
+  const orbits = lite
+    ? [{ radius: 42, speed: 1, n: 2 }, { radius: 62, speed: -0.7, n: 3 }]
+    : [{ radius: 38, speed: 1, n: 3 }, { radius: 54, speed: -0.72, n: 4 }, { radius: 72, speed: 0.48, n: 2 }];
   const planetColors = [
     [255, 220, 120],
     [120, 230, 255],
@@ -1150,7 +1156,7 @@ function drawDragOrbitPlanets(cx, cy) {
   noFill();
   for (let o = 0; o < orbits.length; o++) {
     const orb = orbits[o];
-    const wobble = 1 + 0.06 * sin(phase * 1.1 + o * 2) + 0.04 * organicNoise(phase, o + 5);
+    const wobble = 1 + 0.06 * sin(phase * 1.1 + o * 2) + (lite ? 0 : 0.04 * organicNoise(phase, o + 5));
     const r = orb.radius * wobble;
     const angle = phase * orb.speed;
     stroke(255, 255, 255, 35 + 28 * sin(phase + o * 0.8));
@@ -1161,42 +1167,44 @@ function drawDragOrbitPlanets(cx, cy) {
       const px = cx + r * cos(a);
       const py = cy + r * sin(a);
       const col = planetColors[(o + p) % planetColors.length];
-      const twinkle = 0.7 + 0.3 * organicNoise(phase, p + o * 3);
+      const twinkle = lite ? 1 : 0.7 + 0.3 * organicNoise(phase, p + o * 3);
       noStroke();
-      fill(col[0], col[1], col[2], 200 + 55 * twinkle);
-      drawingContext.shadowBlur = 8 + 4 * twinkle;
-      drawingContext.shadowColor = 'rgba(255,255,255,0.5)';
-      circle(px, py, 9);
-      drawingContext.shadowBlur = 0;
+      fill(col[0], col[1], col[2], 200 + (lite ? 40 : 55 * twinkle));
+      if (useShadow) {
+        drawingContext.shadowBlur = 6 + 4 * twinkle;
+        drawingContext.shadowColor = 'rgba(255,255,255,0.5)';
+      }
+      circle(px, py, lite ? 8 : 9);
+      if (useShadow) drawingContext.shadowBlur = 0;
     }
   }
 
-  // ---- 星星：多圈軌道上畫小星星，每顆有獨立相位與閃爍 ----
-  const starOrbits = [
-    { radius: 44, speed: 0.6, count: 5 },
-    { radius: 62, speed: -0.5, count: 6 },
-    { radius: 80, speed: 0.35, count: 4 }
-  ];
+  // ---- 星星：lite 時少一圈、少顆數 ----
+  const starOrbits = lite
+    ? [{ radius: 48, speed: 0.6, count: 4 }, { radius: 70, speed: -0.45, count: 4 }]
+    : [{ radius: 44, speed: 0.6, count: 5 }, { radius: 62, speed: -0.5, count: 6 }, { radius: 80, speed: 0.35, count: 4 }];
   noStroke();
   for (let s = 0; s < starOrbits.length; s++) {
     const so = starOrbits[s];
     const starAngle = phase * so.speed;
     for (let k = 0; k < so.count; k++) {
-      const a = starAngle + (TWO_PI * k) / so.count + 0.2 * sin(phase + k);
+      const a = starAngle + (TWO_PI * k) / so.count + (lite ? 0 : 0.2 * sin(phase + k));
       const sx = cx + so.radius * cos(a);
       const sy = cy + so.radius * sin(a);
-      const starSize = 4 + 3 * organicNoise(phase, s + k * 7);
+      const starSize = lite ? 4 : 4 + 3 * organicNoise(phase, s + k * 7);
       const starRot = phase * 0.5 + k * 0.6;
-      const starAlpha = 180 + 75 * organicNoise(phase * 1.2, k + s * 4);
+      const starAlpha = lite ? 220 : 180 + 75 * organicNoise(phase * 1.2, k + s * 4);
       fill(255, 255, 230, starAlpha);
-      drawingContext.shadowBlur = 6 + 4 * organicNoise(phase, k + 20);
-      drawingContext.shadowColor = 'rgba(255, 250, 200, 0.6)';
+      if (useShadow) {
+        drawingContext.shadowBlur = 5;
+        drawingContext.shadowColor = 'rgba(255, 250, 200, 0.5)';
+      }
       push();
       translate(sx, sy);
       rotate(starRot);
       drawLittleStar(starSize, 0, 4);
       pop();
-      drawingContext.shadowBlur = 0;
+      if (useShadow) drawingContext.shadowBlur = 0;
     }
   }
 
@@ -1213,10 +1221,15 @@ function easeOutBack(t) {
 // 拋物線＋遠近感：回傳 { x, y, scale }，progress 0~1。弧高（像素）、終點略縮
 const DROP_ARC_HEIGHT = 55;
 const DROP_SCALE_MIN = 0.38;
-const DROP_TRAIL_STEPS = 12;
+const DROP_TRAIL_STEPS = ANIMATION_LITE ? 6 : 10;
 
 function getDropPosition(da, progress) {
   const eased = easeOutBack(progress);
+  if (!da.placed) {
+    const x = da.startX + (da.endX - da.startX) * eased;
+    const y = da.startY + (da.endY - da.startY) * eased;
+    return { x, y, scale: 1 };
+  }
   const linearX = da.startX + (da.endX - da.startX) * eased;
   const linearY = da.startY + (da.endY - da.startY) * eased;
   const arc = 4 * progress * (1 - progress);
@@ -1232,22 +1245,25 @@ function getDropPosition(da, progress) {
 
 // 有機曲線軌跡：用 progress 取樣路徑上的點，畫一條漸隱的曲線（從舊到新，越後面越亮）
 function drawDropOrganicTrail(da, currentProgress) {
+  const steps = DROP_TRAIL_STEPS;
   const pts = [];
-  for (let i = 0; i <= DROP_TRAIL_STEPS; i++) {
-    const p = Math.max(0, currentProgress - 0.4 * (1 - i / DROP_TRAIL_STEPS));
+  for (let i = 0; i <= steps; i++) {
+    const p = Math.max(0, currentProgress - 0.4 * (1 - i / steps));
     pts.push(getDropPosition(da, p));
   }
   noFill();
-  for (let i = 1; i < pts.length; i++) {
-    const alpha = (70 + 50 * organicNoise(currentProgress * 10, i)) * (i / pts.length) * (i / pts.length);
+  const n = pts.length;
+  for (let i = 1; i < n; i++) {
+    const ratio = i / n;
+    const alpha = (70 + (ANIMATION_LITE ? 30 : 50) * (ANIMATION_LITE ? 1 : organicNoise(currentProgress * 10, i))) * ratio * ratio;
     stroke(255, 248, 230, alpha);
-    strokeWeight(2.5 - 1.2 * (i / pts.length));
+    strokeWeight(2.5 - 1.2 * ratio);
     line(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
   }
   noStroke();
 }
 
-// 咖啡豆／錢幣「轉進深處」的有機線條：從飛行物後方拉出的弧線
+// 咖啡豆／錢幣「轉進深處」的有機線條：從飛行物後方拉出的弧線。lite 時少畫幾條。
 function drawDropOrganicLines(da, x, y, progress) {
   const dx = da.endX - da.startX;
   const dy = da.endY - da.startY;
@@ -1255,22 +1271,76 @@ function drawDropOrganicLines(da, x, y, progress) {
   const ux = -dx / len;
   const uy = -dy / len;
   const phase = progress * TWO_PI * 2 + millis() * 0.003;
-  for (let i = 0; i < 5; i++) {
-    const angle = (i / 5) * PI * 0.8 - PI * 0.4 + 0.15 * sin(phase + i * 2);
+  const lineCount = ANIMATION_LITE ? 3 : 5;
+  noFill();
+  for (let i = 0; i < lineCount; i++) {
+    const t = i / lineCount;
+    const angle = t * PI * 0.8 - PI * 0.4 + 0.15 * sin(phase + i * 2);
     const dirX = ux * cos(angle) - uy * sin(angle);
     const dirY = ux * sin(angle) + uy * cos(angle);
-    const segLen = 18 + 14 * organicNoise(progress * 12, i) + 8 * sin(phase + i);
+    const segLen = 18 + (ANIMATION_LITE ? 8 : 14 * organicNoise(progress * 12, i)) + 8 * sin(phase + i);
     const cpx = x + dirX * segLen * 0.5 + 6 * sin(phase + i * 1.7);
     const cpy = y + dirY * segLen * 0.5 + 5 * cos(phase + i * 1.3);
-    const ex = x + dirX * segLen + 4 * organicNoise(phase, i + 10);
-    const ey = y + dirY * segLen + 4 * organicNoise(phase, i + 20);
-    const alpha = (1 - progress) * (70 + 40 * organicNoise(phase, i));
+    const ex = x + dirX * segLen + (ANIMATION_LITE ? 0 : 4 * organicNoise(phase, i + 10));
+    const ey = y + dirY * segLen + (ANIMATION_LITE ? 0 : 4 * organicNoise(phase, i + 20));
+    const alpha = (1 - progress) * (70 + (ANIMATION_LITE ? 20 : 40 * organicNoise(phase, i)));
     stroke(255, 245, 220, alpha);
-    strokeWeight(1.5 + 0.5 * organicNoise(phase, i + 5));
-    noFill();
+    strokeWeight(1.5 + (ANIMATION_LITE ? 0 : 0.5 * organicNoise(phase, i + 5)));
     bezier(x, y, cpx, cpy, cpx + 3 * sin(phase * 2), cpy + 3 * cos(phase * 2), ex, ey);
   }
   noStroke();
+}
+
+// 成功放到別的格子的洞時：在目標格中心畫「水流動」動畫。lite 時減少流線／漣漪／水滴數。
+const WATER_FLOW_RADIUS = 28;
+
+function drawDropWaterFlow(da, progress) {
+  const cx = da.endX;
+  const cy = da.endY;
+  const phase = millis() * 0.004 + progress * TWO_PI;
+  const lite = ANIMATION_LITE;
+  const streamCount = lite ? 4 : 6;
+  const waveCount = lite ? 2 : 3;
+  const dropCount = lite ? 4 : 8;
+  noFill();
+
+  for (let i = 0; i < streamCount; i++) {
+    const angle = (TWO_PI * i) / streamCount + phase * 0.3 + sin(phase + i) * 0.2;
+    const r0 = 4 + (lite ? 4 : 6 * organicNoise(phase, i));
+    const r1 = WATER_FLOW_RADIUS + 8 * sin(phase * 1.2 + i * 0.7);
+    const ax = cx + cos(angle) * r0;
+    const ay = cy + sin(angle) * r0;
+    const bx = cx + cos(angle) * r1;
+    const by = cy + sin(angle) * r1;
+    const cpx = (ax + bx) / 2 + 12 * cos(phase + i * 1.5);
+    const cpy = (ay + by) / 2 + 10 * sin(phase * 1.1 + i);
+    const alpha = (40 + 35 * sin(phase + i * 0.8)) * (0.4 + 0.6 * progress);
+    stroke(180, 220, 255, alpha);
+    strokeWeight(lite ? 2 : 2 + 0.8 * sin(phase * 2 + i));
+    bezier(ax, ay, cpx, cpy, cpx + 4 * cos(phase), cpy + 4 * sin(phase), bx, by);
+  }
+  noStroke();
+
+  for (let w = 0; w < waveCount; w++) {
+    const wavePhase = phase + w * 2.1;
+    const r = WATER_FLOW_RADIUS * (0.5 + 0.5 * progress) + 5 * sin(wavePhase);
+    fill(200, 230, 255, 12 + 8 * sin(wavePhase * 1.3));
+    noStroke();
+    ellipse(cx, cy, r * 2, r * 2);
+  }
+  noFill();
+
+  for (let d = 0; d < dropCount; d++) {
+    const a = (TWO_PI * d) / dropCount + phase * 0.5;
+    const dist = 6 + (lite ? 10 + 4 * sin(phase + d) : 14 * organicNoise(phase * 0.8, d + 30) + 4 * sin(phase + d));
+    const px = cx + cos(a) * dist;
+    const py = cy + sin(a) * dist;
+    const dropR = 2 + 1.5 * sin(phase * 2 + d);
+    fill(220, 240, 255, 80 + 60 * sin(phase + d * 0.7));
+    noStroke();
+    ellipse(px, py, dropR * 2, dropR * 2);
+  }
+  noFill();
 }
 
 function drawDropAnimation() {
@@ -1284,13 +1354,28 @@ function drawDropAnimation() {
     return;
   }
   const pos = getDropPosition(da, progress);
-  const rotation = TWO_PI * progress;
-  drawDropOrganicTrail(da, progress);
-  drawDropOrganicLines(da, pos.x, pos.y, progress);
+  let rotation, drawX, drawY, drawScale;
+  if (da.placed) {
+    rotation = PI * progress;
+    drawX = pos.x;
+    drawY = pos.y;
+    drawScale = pos.scale;
+  } else {
+    const wiggle = sin(progress * PI * 2);
+    rotation = 0.03 * wiggle;
+    drawX = pos.x + 2.5 * wiggle;
+    drawY = pos.y;
+    drawScale = 1;
+  }
+  if (da.placed) {
+    drawDropWaterFlow(da, progress);
+    drawDropOrganicTrail(da, progress);
+    drawDropOrganicLines(da, pos.x, pos.y, progress);
+  }
   push();
-  translate(pos.x, pos.y);
+  translate(drawX, drawY);
   rotate(rotation);
-  scale(pos.scale);
+  scale(drawScale);
   drawOneItem(0, 0, da.typeIndex, false, false);
   pop();
 }
@@ -1337,7 +1422,7 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   const baseSize = Math.min(slotW, slotH) * 0.82;
   const size = isDragging ? baseSize * 1.15 : baseSize;
   push();
-  if (isDragging) {
+  if (isDragging && !ANIMATION_LITE) {
     drawingContext.shadowOffsetX = 4;
     drawingContext.shadowOffsetY = 4;
     drawingContext.shadowBlur = 12;
@@ -1358,6 +1443,11 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   textAlign(CENTER, CENTER);
   textSize(Math.max(12, size * 0.45));
   text(t.name, x, y);
+  if (isDragging && !ANIMATION_LITE) {
+    drawingContext.shadowBlur = 0;
+    drawingContext.shadowOffsetX = 0;
+    drawingContext.shadowOffsetY = 0;
+  }
   pop();
 }
 
