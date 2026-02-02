@@ -309,7 +309,7 @@ let levelCompleteCelebration = null;  // { active, startedAt, duration, complete
 
 // --- 拖曳／放置動畫（主機遊戲感）---
 let dragOrbitPhase = 0;   // 拖曳時軌道星球旋轉相位（每幀累加）
-const DRAG_ORBIT_SPEED = 0.04;
+const DRAG_ORBIT_SPEED = 0.08;
 const DROP_ANIMATION_DURATION_MS = 420;  // 放下時旋轉一圈＋飛行的時長
 let dropAnimation = null; // { startTime, startX, startY, endX, endY, typeIndex, placed, srcCell, srcSlot, targetCell, swapSlot, doSwap } 放開後飛行＋旋轉，結束時再執行實際放置
 const DEBUG_PANEL_WIDTH = 280;
@@ -1097,119 +1097,110 @@ function drawItems() {
   }
 }
 
-// 畫一顆小星星（四角星，中心在 0,0）
-function drawLittleStar(size, innerRatio) {
-  const inner = size * (innerRatio != null ? innerRatio : 0.4);
+// 畫一顆小星星（4 尖或 5 尖，中心在 0,0，半徑 r，旋轉 rot）
+function drawLittleStar(r, rot, points) {
+  points = points || 5;
+  const step = TWO_PI / points;
   beginShape();
-  for (let i = 0; i < 8; i++) {
-    const r = (i % 2 === 0) ? size : inner;
-    const a = (i / 8) * TWO_PI - HALF_PI;
-    vertex(r * cos(a), r * sin(a));
+  for (let i = 0; i < points * 2; i++) {
+    const rad = (i % 2 === 0) ? r : r * 0.4;
+    const a = rot + i * step * 0.5;
+    vertex(cos(a) * rad, sin(a) * rad);
   }
   endShape(CLOSE);
 }
 
-// 拖曳時：軌道星球 ＋ 星星環繞 ＋ 光線綻放（有機、帶亂數）
+// 有機亂數：用相位與索引產生不規則但平滑的 0~1（不閃爍）
+function organicNoise(phase, index) {
+  return (sin(phase * 1.37 + index * 2.1) * 0.5 + 0.5) * (0.6 + 0.4 * cos(phase * 0.83 + index));
+}
+
+// 拖曳時：星星環繞 + 光暈綻放（有機、帶亂數感）
 function drawDragOrbitPlanets(cx, cy) {
   dragOrbitPhase += DRAG_ORBIT_SPEED;
-  const t = dragOrbitPhase;
+  const phase = dragOrbitPhase;
+  const t = millis() * 0.002;
 
-  // --- 光線綻放（從中心向外，有機角度與長度）---
-  const numRays = 12 + floor(random(5));
-  push();
-  translate(cx, cy);
+  // ---- 光暈綻放：多層橢圓，半徑與透明度隨時間「呼吸」，帶一點亂數感 ----
   noStroke();
-  for (let i = 0; i < numRays; i++) {
-    const baseAngle = (i / numRays) * TWO_PI + sin(t * 0.5 + i * 0.4) * 0.15 + random(-0.08, 0.08);
-    const len = 45 + 25 * sin(t * 0.5 + i * 0.3) + random(5, 18);
-    const alpha = 12 + 14 * sin(t * 0.5 + i * 0.25) + random(0, 8);
-    const w = 3 + random(4);
-    push();
-    rotate(baseAngle);
-    fill(255, 255, 255, alpha);
-    rect(0, -w / 2, len, w);
-    pop();
+  for (let i = 0; i < 8; i++) {
+    const breath = 0.75 + 0.35 * sin(t + i * 0.7) + 0.15 * organicNoise(phase, i);
+    const radius = (35 + i * 12 + 8 * sin(t * 1.2 + i * 0.5)) * breath;
+    const alpha = (12 + 14 * sin(t * 0.9 + i * 0.4) + 6 * organicNoise(phase, i + 10)) | 0;
+    fill(255, 255, 255, Math.max(2, alpha));
+    drawingContext.shadowBlur = 20 + 15 * sin(t + i * 0.3);
+    drawingContext.shadowColor = 'rgba(255, 240, 220, 0.35)';
+    ellipse(cx, cy, radius * 2, radius * 2);
   }
-  pop();
-
-  // --- 中心柔和光暈 ---
-  noStroke();
-  fill(255, 255, 255, 12 + 6 * sin(t * 0.8));
-  drawingContext.shadowBlur = 28 + 8 * sin(t * 0.6);
-  drawingContext.shadowColor = 'rgba(255,255,255,0.35)';
-  ellipse(cx, cy, 95 + 10 * sin(t * 0.4), 95 + 10 * sin(t * 0.4));
   drawingContext.shadowBlur = 0;
-  noFill();
 
-  // --- 軌道圓 ＋ 小星球 ---
+  // ---- 軌道線（輕微晃動，更有機） ----
   const orbits = [
-    { radius: 42, speed: 1, planets: 3 },
-    { radius: 58, speed: -0.7, planets: 4 },
-    { radius: 74, speed: 0.5, planets: 2 }
+    { radius: 38, speed: 1, n: 3 },
+    { radius: 54, speed: -0.72, n: 4 },
+    { radius: 72, speed: 0.48, n: 2 }
   ];
   const planetColors = [
-    [255, 200, 100],
-    [100, 220, 255],
-    [255, 150, 200],
-    [180, 255, 150],
-    [255, 180, 120]
+    [255, 220, 120],
+    [120, 230, 255],
+    [255, 160, 200],
+    [190, 255, 160],
+    [255, 200, 130]
   ];
   noFill();
   for (let o = 0; o < orbits.length; o++) {
     const orb = orbits[o];
-    const angle = dragOrbitPhase * orb.speed;
-    stroke(255, 255, 255, 35 + 22 * sin(t * 0.5 + o * 0.6));
+    const wobble = 1 + 0.06 * sin(phase * 1.1 + o * 2) + 0.04 * organicNoise(phase, o + 5);
+    const r = orb.radius * wobble;
+    const angle = phase * orb.speed;
+    stroke(255, 255, 255, 35 + 28 * sin(phase + o * 0.8));
     strokeWeight(1.5);
-    ellipse(cx, cy, orb.radius * 2, orb.radius * 2);
-    for (let p = 0; p < orb.planets; p++) {
-      const a = angle + (TWO_PI * p) / orb.planets;
-      const px = cx + orb.radius * cos(a);
-      const py = cy + orb.radius * sin(a);
+    ellipse(cx, cy, r * 2, r * 2);
+    for (let p = 0; p < orb.n; p++) {
+      const a = angle + (TWO_PI * p) / orb.n;
+      const px = cx + r * cos(a);
+      const py = cy + r * sin(a);
       const col = planetColors[(o + p) % planetColors.length];
+      const twinkle = 0.7 + 0.3 * organicNoise(phase, p + o * 3);
       noStroke();
-      fill(col[0], col[1], col[2], 235 + random(0, 20));
-      drawingContext.shadowBlur = 8 + random(0, 4);
+      fill(col[0], col[1], col[2], 200 + 55 * twinkle);
+      drawingContext.shadowBlur = 8 + 4 * twinkle;
       drawingContext.shadowColor = 'rgba(255,255,255,0.5)';
-      circle(px, py, 9 + random(0, 3));
+      circle(px, py, 9);
       drawingContext.shadowBlur = 0;
     }
   }
-  noStroke();
 
-  // --- 星星環繞（多層、有機半徑與角度）---
-  const starColors = [
-    [255, 255, 200],
-    [255, 230, 180],
-    [200, 255, 255],
-    [255, 200, 255],
-    [220, 255, 220]
+  // ---- 星星：多圈軌道上畫小星星，每顆有獨立相位與閃爍 ----
+  const starOrbits = [
+    { radius: 44, speed: 0.6, count: 5 },
+    { radius: 62, speed: -0.5, count: 6 },
+    { radius: 80, speed: 0.35, count: 4 }
   ];
-  const numStarRings = 2;
-  for (let ring = 0; ring < numStarRings; ring++) {
-    const baseR = 38 + ring * 28 + sin(t * 0.5 + ring) * 4 + random(-3, 3);
-    const starCount = 2 + floor(random(2));
-    const ringSpeed = 0.4 + ring * 0.1 + random(-0.03, 0.06);
-    const angleOffset = (ring * 0.7 + t * 0.1) * (ring % 2 === 0 ? 1 : -1);
-    for (let i = 0; i < starCount; i++) {
-      const a = angleOffset + (i / starCount) * TWO_PI + random(-0.15, 0.15) + t * ringSpeed;
-      const r = baseR + random(-6, 6);
-      const sx = cx + r * cos(a);
-      const sy = cy + r * sin(a);
-      const starSize = 4 + random(4) + 1.5 * sin(t * 1 + i * 0.5);
-      const col = starColors[(ring + i) % starColors.length];
-      const alpha = 180 + 55 * sin(t * 0.8 + i * 0.4) + random(0, 40);
+  noStroke();
+  for (let s = 0; s < starOrbits.length; s++) {
+    const so = starOrbits[s];
+    const starAngle = phase * so.speed;
+    for (let k = 0; k < so.count; k++) {
+      const a = starAngle + (TWO_PI * k) / so.count + 0.2 * sin(phase + k);
+      const sx = cx + so.radius * cos(a);
+      const sy = cy + so.radius * sin(a);
+      const starSize = 4 + 3 * organicNoise(phase, s + k * 7);
+      const starRot = phase * 0.5 + k * 0.6;
+      const starAlpha = 180 + 75 * organicNoise(phase * 1.2, k + s * 4);
+      fill(255, 255, 230, starAlpha);
+      drawingContext.shadowBlur = 6 + 4 * organicNoise(phase, k + 20);
+      drawingContext.shadowColor = 'rgba(255, 250, 200, 0.6)';
       push();
       translate(sx, sy);
-      rotate(a + t * 0.25);
-      noStroke();
-      fill(col[0], col[1], col[2], alpha);
-      drawingContext.shadowBlur = 6 + random(0, 6);
-      drawingContext.shadowColor = 'rgba(255,255,255,0.6)';
-      drawLittleStar(starSize, 0.35 + random(0.15));
-      drawingContext.shadowBlur = 0;
+      rotate(starRot);
+      drawLittleStar(starSize, 0, 4);
       pop();
+      drawingContext.shadowBlur = 0;
     }
   }
+
+  noFill();
 }
 
 // 放置動畫：飛行＋旋轉一圈的進度曲線（easeOutBack 讓落地更有彈性）
