@@ -78,10 +78,13 @@ const ITEM_TYPES = [
   { id: 'ge3', name: '個', color: [78, 52, 46] },
   { id: 'na', name: '那', color: [62, 39, 35] },
   { id: 'hao2', name: '好', color: [115, 115, 115] },
-  { id: 'ba', name: '吧', color: [255, 112, 67] }
+  { id: 'ba', name: '吧', color: [255, 112, 67] },
+  { id: 'av1', name: '①', color: [52, 152, 219] },
+  { id: 'av2', name: '②', color: [241, 196, 15] },
+  { id: 'av3', name: '③', color: [231, 76, 60] }
 ];
 const TYPES_PER_LEVEL = 3;  // 每關 3 種
-const NUM_LEVELS = 22;      // 關卡數（…當然好, 你早說～那好吧）
+const NUM_LEVELS = 23;      // 關卡數（…那好吧, 第 23 關 Avatars）
 
 // --- 小動物療癒風主題色（暖米/奶油/薄荷/蜜桃）---
 const THEME_BG = [250, 245, 235];           // 畫布背景 暖米
@@ -126,11 +129,11 @@ const SWAP_ZONE_SLOTS = 2;
 let swapZone;         // { x, y, w, h, slotW, slotH, gap } 每格中心由 getSwapZoneSlotCenter 算
 let swapHistoryZone;  // 最下面已交換區 { x, y, w, h, pad, lineHeight }
 // 輸送帶（關卡預覽）：在已交換區上方，顯示接下來的關卡組
-const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧'];
-// 關卡頭像：key = 關卡索引，value = 該關 3 種類型依序的圖片 URL（可擴充其他關卡）
-const AVATAR_URLS_BY_LEVEL = { 0: ['/public/avatars/avatar_1.png', '/public/avatars/avatar_2.png', '/public/avatars/avatar_3.png'] };
+const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧', 'Avatars'];
+// 關卡頭像：key = 關卡索引，value = 該關 3 種類型依序的圖片 URL。規則：第 N 關（index N-1）的頭像放在 public/avatars/{N}/ 底下，檔名 avatar_1.png、avatar_2.png、avatar_3.png
+const AVATAR_URLS_BY_LEVEL = { 22: ['/public/avatars/23/avatar_1.png', '/public/avatars/23/avatar_2.png', '/public/avatars/23/avatar_3.png'] };
 let avatarImagesByLevel = {};  // 已載入的 PImage：avatarImagesByLevel[level][localIndex]
-let currentLevel = 0;   // 當前關卡 0–21；過關後換成下一關的卡片
+let currentLevel = 0;   // 當前關卡 0–22；過關後換成下一關的卡片
 let conveyorZone;       // { x, y, w, h, pad, segmentW } 輸送帶區塊
 // 輸送帶「非下一關」的模糊格：依 currentLevel 快取，只在換關時做一次 blur，避免每幀 6 次 filter 傷效能
 let conveyorCachedBlur = { level: -1, pg: null };
@@ -865,7 +868,7 @@ function draw() {
   drawTimer();
   if (gameState === 'idle' || gameState === 'playing') {
     drawWinConditionHint();
-    drawShelfCompletionOnScreen();
+    // drawShelfCompletionOnScreen();  // 每櫃完成與否顯示區已註解
   }
   if (gameState === 'completed') {
     drawResultOverlay();
@@ -1170,10 +1173,11 @@ function drawShelves() {
       const sy = baseY + row * (slotH + gap) + slotH / 2;
       ellipse(sx, sy, slotW * 0.85, slotH * 0.85);
     }
-    fill(THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]);
-    textAlign(CENTER, BOTTOM);
-    textSize(Math.min(14, cellW * 0.12));
-    text('櫃' + c, x + cellW / 2, y - 2);
+    // 櫃0～櫃8 字樣已註解
+    // fill(THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]);
+    // textAlign(CENTER, BOTTOM);
+    // textSize(Math.min(14, cellW * 0.12));
+    // text('櫃' + c, x + cellW / 2, y - 2);
   }
 }
 
@@ -1532,7 +1536,14 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   noStroke();
   if (avatarImg) {
     imageMode(CENTER);
-    image(avatarImg, x, y, size * 1.4, size);
+    const maxW = size * 1.4;
+    const maxH = size;
+    const imgW = avatarImg.width;
+    const imgH = avatarImg.height;
+    const scale = Math.min(maxW / imgW, maxH / imgH, 1);
+    const drawW = imgW * scale;
+    const drawH = imgH * scale;
+    image(avatarImg, x, y, drawW, drawH);
   } else {
     fill(255);
     textAlign(CENTER, CENTER);
@@ -1569,31 +1580,31 @@ function drawWinConditionHint() {
   text('過關：9 櫃（3×3）每櫃 3 格需「全部同一種」（' + names + '）', 20, 52);
 }
 
-// 在畫面上直接顯示每櫃完成狀態，方便看出「為什麼還沒過關」
-function drawShelfCompletionOnScreen() {
-  if (gameState !== 'playing') return;
-  const levelIndices = getLevelTypeIndices(currentLevel);
-  const ts = Math.min(12, width * 0.022);
-  textSize(ts);
-  textAlign(LEFT, TOP);
-  let y = 72;
-  for (let c = 0; c < NUM_CELLS; c++) {
-    const list = cells[c];
-    const counts = [0, 0, 0];
-    for (let i = 0; i < list.length; i++) {
-      const idx = levelIndices.indexOf(list[i].typeIndex);
-      if (idx >= 0) counts[idx]++;
-    }
-    const same = (counts[0] === ITEMS_PER_CELL || counts[1] === ITEMS_PER_CELL || counts[2] === ITEMS_PER_CELL);
-    fill(same ? 100 : THEME_TEXT_DARK[0], same ? 180 : THEME_TEXT_DARK[1], same ? 140 : THEME_TEXT_DARK[2]);
-    const n0 = ITEM_TYPES[levelIndices[0]].name;
-    const n1 = ITEM_TYPES[levelIndices[1]].name;
-    const n2 = ITEM_TYPES[levelIndices[2]].name;
-    const line = '櫃' + c + ': ' + n0 + counts[0] + ' ' + n1 + counts[1] + ' ' + n2 + counts[2] + (same ? ' ✓' : ' 未完成');
-    text(line, 20, y);
-    y += ts + 2;
-  }
-}
+// 在畫面上直接顯示每櫃完成狀態，方便看出「為什麼還沒過關」—— 已註解
+// function drawShelfCompletionOnScreen() {
+//   if (gameState !== 'playing') return;
+//   const levelIndices = getLevelTypeIndices(currentLevel);
+//   const ts = Math.min(12, width * 0.022);
+//   textSize(ts);
+//   textAlign(LEFT, TOP);
+//   let y = 72;
+//   for (let c = 0; c < NUM_CELLS; c++) {
+//     const list = cells[c];
+//     const counts = [0, 0, 0];
+//     for (let i = 0; i < list.length; i++) {
+//       const idx = levelIndices.indexOf(list[i].typeIndex);
+//       if (idx >= 0) counts[idx]++;
+//     }
+//     const same = (counts[0] === ITEMS_PER_CELL || counts[1] === ITEMS_PER_CELL || counts[2] === ITEMS_PER_CELL);
+//     fill(same ? 100 : THEME_TEXT_DARK[0], same ? 180 : THEME_TEXT_DARK[1], same ? 140 : THEME_TEXT_DARK[2]);
+//     const n0 = ITEM_TYPES[levelIndices[0]].name;
+//     const n1 = ITEM_TYPES[levelIndices[1]].name;
+//     const n2 = ITEM_TYPES[levelIndices[2]].name;
+//     const line = '櫃' + c + ': ' + n0 + counts[0] + ' ' + n1 + counts[1] + ' ' + n2 + counts[2] + (same ? ' ✓' : ' 未完成');
+//     text(line, 20, y);
+//     y += ts + 2;
+//   }
+// }
 
 function drawResultOverlay() {
   fill(THEME_OVERLAY[0], THEME_OVERLAY[1], THEME_OVERLAY[2], 160);
