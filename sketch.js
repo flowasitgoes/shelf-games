@@ -127,6 +127,9 @@ let swapZone;         // { x, y, w, h, slotW, slotH, gap } 每格中心由 getSw
 let swapHistoryZone;  // 最下面已交換區 { x, y, w, h, pad, lineHeight }
 // 輸送帶（關卡預覽）：在已交換區上方，顯示接下來的關卡組
 const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧'];
+// 關卡頭像：key = 關卡索引，value = 該關 3 種類型依序的圖片 URL（可擴充其他關卡）
+const AVATAR_URLS_BY_LEVEL = { 0: ['/public/avatars/avatar_1.png', '/public/avatars/avatar_2.png', '/public/avatars/avatar_3.png'] };
+let avatarImagesByLevel = {};  // 已載入的 PImage：avatarImagesByLevel[level][localIndex]
 let currentLevel = 0;   // 當前關卡 0–21；過關後換成下一關的卡片
 let conveyorZone;       // { x, y, w, h, pad, segmentW } 輸送帶區塊
 // 輸送帶「非下一關」的模糊格：依 currentLevel 快取，只在換關時做一次 blur，避免每幀 6 次 filter 傷效能
@@ -136,6 +139,24 @@ let conveyorCachedBlur = { level: -1, pg: null };
 function getLevelTypeIndices(level) {
   const base = level * TYPES_PER_LEVEL;
   return [base, base + 1, base + 2];
+}
+
+// 依關卡與類型回傳頭像 URL，無則回傳 null（接口：之後可改為從 API 或別處讀取）
+function getAvatarUrlForType(level, typeIndex) {
+  const levelIndices = getLevelTypeIndices(level);
+  const localIndex = levelIndices.indexOf(typeIndex);
+  if (localIndex === -1 || !AVATAR_URLS_BY_LEVEL[level] || !AVATAR_URLS_BY_LEVEL[level][localIndex]) return null;
+  return AVATAR_URLS_BY_LEVEL[level][localIndex];
+}
+
+// 依關卡與類型回傳已載入的頭像 PImage，無或未載入則回傳 null
+function getAvatarImageForType(level, typeIndex) {
+  const levelIndices = getLevelTypeIndices(level);
+  const localIndex = levelIndices.indexOf(typeIndex);
+  if (localIndex === -1 || !avatarImagesByLevel[level] || !avatarImagesByLevel[level][localIndex]) return null;
+  const img = avatarImagesByLevel[level][localIndex];
+  if (img && img.width && img.width > 0) return img;
+  return null;
 }
 
 // --- 拖放音效（Web Audio 合成，無需音檔）---
@@ -521,6 +542,16 @@ function enableSound() {
     }
   } catch (e) {
     if (typeof console !== 'undefined' && console.warn) console.warn('enableSound:', e);
+  }
+}
+
+function preload() {
+  for (const level in AVATAR_URLS_BY_LEVEL) {
+    const urls = AVATAR_URLS_BY_LEVEL[level];
+    avatarImagesByLevel[level] = [];
+    for (let i = 0; i < urls.length; i++) {
+      avatarImagesByLevel[level][i] = loadImage(urls[i]);
+    }
   }
 }
 
@@ -1480,6 +1511,7 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   const slotH = (cellH - 2 * pad - (SLOTS_GRID_ROWS - 1) * gap) / SLOTS_GRID_ROWS;
   const baseSize = Math.min(slotW, slotH) * 0.82;
   const size = isDragging ? baseSize * 1.15 : baseSize;
+  const avatarImg = getAvatarImageForType(currentLevel, typeIndex);
   push();
   if (isDragging && !ANIMATION_LITE) {
     drawingContext.shadowOffsetX = 4;
@@ -1498,10 +1530,15 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
   rectMode(CENTER);
   rect(x, y, size * 1.4, size, 6);
   noStroke();
-  fill(255);
-  textAlign(CENTER, CENTER);
-  textSize(Math.max(12, size * 0.45));
-  text(t.name, x, y);
+  if (avatarImg) {
+    imageMode(CENTER);
+    image(avatarImg, x, y, size * 1.4, size);
+  } else {
+    fill(255);
+    textAlign(CENTER, CENTER);
+    textSize(Math.max(12, size * 0.45));
+    text(t.name, x, y);
+  }
   if (isDragging && !ANIMATION_LITE) {
     drawingContext.shadowBlur = 0;
     drawingContext.shadowOffsetX = 0;
