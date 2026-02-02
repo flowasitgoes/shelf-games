@@ -169,13 +169,94 @@ const SLAB_LEVEL_FIRST = 23;   // awe1 的 level index
 const SLAB_LEVEL_LAST = 32;   // awe10 的 level index
 const LOCAL_STORAGE_KEY_USED_SLAB = 'shelfGame_usedSlabIcons';
 const FONT_AWESOME_SVG_BASE = 'https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.1/svgs/solid/';
-// Font Awesome 圖示填色：線性漸層 linear-gradient(#a500ff, #00ffa5)，紫到青綠
+// Font Awesome 圖示填色：預設為多層灰階漸層（黑與白之間）；亦可使用雙色漸層
 const SLAB_ICON_GRADIENT_START = '#a500ff';
 const SLAB_ICON_GRADIENT_END = '#00ffa5';
-// 將 SVG 字串改為使用線性漸層填色（在 defs 加入 linearGradient，path 填 fill="url(#iconGrad)"）
-function applySvgLinearGradient(svgText, gradId) {
+// 多層灰階漸層（linear 角度隨機）：白→灰→淺灰→白→淺灰→深灰→灰
+const SLAB_ICON_GRADIENT_STOPS = [
+  { offset: '0%', color: 'rgb(245,245,245)' },
+  { offset: '17%', color: 'rgb(181,181,181)' },
+  { offset: '29%', color: 'rgb(168,168,168)' },
+  { offset: '45%', color: 'rgb(255,255,255)' },
+  { offset: '68%', color: 'rgb(209,209,209)' },
+  { offset: '85%', color: 'rgb(115,115,115)' },
+  { offset: '100%', color: 'rgb(194,194,194)' }
+];
+// Platinum 按鈕風格漸層（參考 .button-platinum）：#dedeff / #ffffff / #555564 多層，角度 -72deg
+const SLAB_ICON_GRADIENT_STOPS_PLATINUM = [
+  { offset: '0%', color: '#dedeff' },
+  { offset: '16%', color: '#ffffff' },
+  { offset: '21%', color: '#dedeff' },
+  { offset: '24%', color: '#ffffff' },
+  { offset: '27%', color: '#555564' },
+  { offset: '36%', color: '#dedeff' },
+  { offset: '45%', color: '#ffffff' },
+  { offset: '60%', color: '#ffffff' },
+  { offset: '72%', color: '#dedeff' },
+  { offset: '80%', color: '#ffffff' },
+  { offset: '84%', color: '#dedeff' },
+  { offset: '100%', color: '#555564' }
+];
+const SLAB_ICON_GRADIENT_ANGLE_PLATINUM = -72;
+// 隨機產生多層灰階漸層 stops（5～7 個色階，在黑與白之間）
+function getRandomGrayscaleStops() {
+  var count = 5 + Math.floor(Math.random() * 3);
+  var stops = [];
+  var used = {};
+  for (var i = 0; i < count; i++) {
+    var offset = Math.floor(Math.random() * 101);
+    if (used[offset] !== undefined) continue;
+    used[offset] = true;
+    stops.push({ offset: offset + '%', gray: Math.floor(Math.random() * 256) });
+  }
+  stops.sort(function (a, b) { return parseInt(a.offset, 10) - parseInt(b.offset, 10); });
+  return stops.map(function (s) { var g = s.gray; return { offset: s.offset, color: 'rgb(' + g + ',' + g + ',' + g + ')' }; });
+}
+// 隨機產生一組雙色漸層 { start: '#xxx', end: '#xxx' }（HSL 隨機色相）
+function getRandomGradient() {
+  function hslToHex(h, s, l) {
+    s /= 100;
+    l /= 100;
+    var c = (1 - Math.abs(2 * l - 1)) * s;
+    var x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    var m = l - c / 2;
+    var r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; b = 0; } else if (h < 120) { r = x; g = c; b = 0; } else if (h < 180) { r = 0; g = c; b = x; } else if (h < 240) { r = 0; g = x; b = c; } else if (h < 300) { r = x; g = 0; b = c; } else { r = c; g = 0; b = x; }
+    function toHex(n) { var v = Math.round((n + m) * 255); v = Math.max(0, Math.min(255, v)); return (v < 16 ? '0' : '') + v.toString(16); }
+    return '#' + toHex(r) + toHex(g) + toHex(b);
+  }
+  var h1 = Math.floor(Math.random() * 360);
+  var h2 = (h1 + 80 + Math.floor(Math.random() * 100)) % 360;
+  return { start: hslToHex(h1, 85, 55), end: hslToHex(h2, 85, 55) };
+}
+// 將 CSS 角度 deg（0=上、90=右、順時針）轉成 SVG linearGradient 的 x1,y1,x2,y2（0～100%）
+function linearGradientAngleToSvg(angleDeg) {
+  var rad = (angleDeg != null ? angleDeg : 180) * Math.PI / 180;
+  var s = Math.sin(rad);
+  var c = Math.cos(rad);
+  var x1 = 50 * (1 - s);
+  var y1 = 50 * (1 + c);
+  var x2 = 50 * (1 + s);
+  var y2 = 50 * (1 - c);
+  return { x1: x1 + '%', y1: y1 + '%', x2: x2 + '%', y2: y2 + '%' };
+}
+// 將 SVG 字串改為使用漸層填色。gradOpt 可為：{ stops, angleDeg } 多層＋角度，或 { start, end } 雙色；或傳 startColor, endColor 雙色。angleDeg 為 CSS 角度（0=上、90=右），省略則 180deg（上到下）
+function applySvgLinearGradient(svgText, gradId, startColorOrStops, endColor, angleDeg) {
   if (!gradId) gradId = 'iconGrad';
-  var defs = '<defs><linearGradient id="' + gradId + '" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="' + SLAB_ICON_GRADIENT_START + '"/><stop offset="100%" stop-color="' + SLAB_ICON_GRADIENT_END + '"/></linearGradient></defs>';
+  var defs;
+  var stops = Array.isArray(startColorOrStops) && startColorOrStops.length > 0 && startColorOrStops[0].offset != null && startColorOrStops[0].color != null
+    ? startColorOrStops
+    : (startColorOrStops && typeof startColorOrStops === 'object' && startColorOrStops.stops) ? startColorOrStops.stops : null;
+  var angle = (startColorOrStops && typeof startColorOrStops === 'object' && startColorOrStops.angleDeg != null) ? startColorOrStops.angleDeg : angleDeg;
+  var xy = linearGradientAngleToSvg(angle);
+  if (stops && stops.length > 0) {
+    var stopStr = stops.map(function (s) { return '<stop offset="' + s.offset + '" stop-color="' + s.color + '"/>'; }).join('');
+    defs = '<defs><linearGradient id="' + gradId + '" x1="' + xy.x1 + '" y1="' + xy.y1 + '" x2="' + xy.x2 + '" y2="' + xy.y2 + '">' + stopStr + '</linearGradient></defs>';
+  } else {
+    var start = (startColorOrStops != null && typeof startColorOrStops === 'string' && startColorOrStops !== '') ? startColorOrStops : SLAB_ICON_GRADIENT_START;
+    var end = (endColor != null && endColor !== '') ? endColor : SLAB_ICON_GRADIENT_END;
+    defs = '<defs><linearGradient id="' + gradId + '" x1="' + xy.x1 + '" y1="' + xy.y1 + '" x2="' + xy.x2 + '" y2="' + xy.y2 + '"><stop offset="0%" stop-color="' + start + '"/><stop offset="100%" stop-color="' + end + '"/></linearGradient></defs>';
+  }
   var inserted = svgText.replace(/<svg([^>]*)>/i, '<svg$1>' + defs);
   var filled = inserted.replace(/\bfill="[^"]*"/gi, 'fill="url(#' + gradId + ')"').replace(/\bfill:\s*currentColor\b/gi, 'fill:url(#' + gradId + ')');
   if (filled === inserted) filled = inserted.replace(/<path /i, '<path fill="url(#' + gradId + ')" ');
@@ -191,6 +272,7 @@ var SLAB_FALLBACK_SVG_STRINGS;
 })();
 let slabIconNamesByLevel = {};   // key = level index 23..32，value = [name0, name1, name2]（已用圖示會記錄在 localStorage）
 let slabImagesByLevel = {};     // key = level index 23..32，value = [img0, img1, img2]
+let slabGradientByLevel = {};   // key = level index 23..32，value = { stops: [{offset, color}, ...] } 多層灰階 或 { start, end } 雙色
 let slabFallbackTimeoutId = null;
 let currentLevel = 0;   // 當前關卡 0–32；過關後換成下一關的卡片
 let conveyorZone;       // { x, y, w, h, pad, segmentW } 輸送帶區塊
@@ -263,11 +345,13 @@ function pickThreeSlabIcons() {
   return chosen;
 }
 
-// 確保單一 awe 關卡（levelIndex 23..32）已選好 3 個圖示並開始載入；每關呼叫 pickThreeSlabIcons() 一次，已用圖示會記錄在 localStorage 不重複
+// 確保單一 awe 關卡（levelIndex 23..32）已選好 3 個圖示並開始載入；每關使用多層灰階漸層（黑與白之間），圖示共用該漸層
 function ensureSlabIconsForLevel(levelIndex) {
   if (slabIconNamesByLevel[levelIndex] != null) return;
   slabIconNamesByLevel[levelIndex] = pickThreeSlabIcons();
+  slabGradientByLevel[levelIndex] = { stops: SLAB_ICON_GRADIENT_STOPS_PLATINUM, angleDeg: SLAB_ICON_GRADIENT_ANGLE_PLATINUM };
   slabImagesByLevel[levelIndex] = [null, null, null];
+  var grad = slabGradientByLevel[levelIndex];
   for (let i = 0; i < 3; i++) {
     (function (j) {
       const name = slabIconNamesByLevel[levelIndex][j];
@@ -276,7 +360,9 @@ function ensureSlabIconsForLevel(levelIndex) {
       fetch(url, { mode: 'cors' })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
         .then(function (svgText) {
-          var withGradient = applySvgLinearGradient(svgText, gradId);
+          var withGradient = grad.stops
+            ? applySvgLinearGradient(svgText, gradId, grad)
+            : applySvgLinearGradient(svgText, gradId, grad.start, grad.end);
           var blob = new Blob([withGradient], { type: 'image/svg+xml;charset=utf-8' });
           var blobUrl = URL.createObjectURL(blob);
           loadImage(blobUrl, function (img) {
@@ -302,7 +388,10 @@ function ensureAllSlabLevelsReady() {
           const current = slabImagesByLevel[lev][j];
           if (!current || (typeof current.width === 'number' && current.width <= 0)) {
             const rawSvg = SLAB_FALLBACK_SVG_STRINGS[j];
-            const withGradient = applySvgLinearGradient(rawSvg, 'fallbackGrad_' + lev + '_' + j);
+            var grad = slabGradientByLevel[lev] || { stops: SLAB_ICON_GRADIENT_STOPS_PLATINUM, angleDeg: SLAB_ICON_GRADIENT_ANGLE_PLATINUM };
+            var withGradient = grad.stops
+              ? applySvgLinearGradient(rawSvg, 'fallbackGrad_' + lev + '_' + j, grad)
+              : applySvgLinearGradient(rawSvg, 'fallbackGrad_' + lev + '_' + j, grad.start, grad.end);
             const dataUri = 'data:image/svg+xml,' + encodeURIComponent(withGradient);
             loadImage(dataUri, function (img) {
               if (img && slabImagesByLevel[lev] && j >= 0 && j <= 2) slabImagesByLevel[lev][j] = img;
