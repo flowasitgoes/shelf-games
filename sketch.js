@@ -171,9 +171,38 @@ const ITEM_TYPES = [
   { id: 'slab85', name: '◇', color: [210, 137, 194] },
   { id: 'slab86', name: '◇', color: [210, 137, 160] },
   { id: 'slab87', name: '◇', color: [137, 192, 210] }
-];
+].concat((function () {
+  // 54～98 關 Avatars：卡片背景色隨機變色邏輯像 1～24 關（每關 3 種各一色，HSL 分散 hue）
+  const arr = [];
+  const hue2rgb = function (p, q, t) {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  for (let i = 0; i < 135; i++) {
+    const h = ((i * 137.5) % 360) / 360;
+    const s = 0.45;
+    const l = 0.68;
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const r = hue2rgb(p, q, h + 1 / 3);
+    const g = hue2rgb(p, q, h);
+    const b = hue2rgb(p, q, h - 1 / 3);
+    const level = 54 + Math.floor(i / 3);
+    const local = i % 3 + 1;
+    arr.push({
+      id: 'av' + level + '_' + local,
+      name: ['①', '②', '③'][i % 3],
+      color: [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)]
+    });
+  }
+  return arr;
+})());
 const TYPES_PER_LEVEL = 3;  // 每關 3 種
-const NUM_LEVELS = 53;      // 關卡數（…Avatars, awe1～awe30）
+const NUM_LEVELS = 98;      // 關卡數（…Avatars, awe1～awe30, Avatars 54～98）
 
 // --- 小動物療癒風主題色（暖米/奶油/薄荷/蜜桃）---
 const THEME_BG = [250, 245, 235];           // 畫布背景 暖米
@@ -208,6 +237,7 @@ let replayBtn;       // 再玩一次按鈕區域 { x, y, w, h }
 let audioCtx = null; // Web Audio 用於拖放音效（首次使用者操作時建立並 resume）
 let soundEnabled = false; // 使用者點「開啟音效」後才播放
 let soundBarDiv = null;   // 正上方音效按鈕列
+const AVATAR_54_98_BG_GRAY = 23; // 54～98 關卡片底色固定 23% 灰階（0%=白、100%=全黑）
 
 // 書櫃佈局：9 櫃排成 3×3，每櫃寬 cellW、高 cellH
 let shelfY, shelfH;   // 書櫃區域上緣與總高度（3 列）
@@ -218,9 +248,18 @@ const SWAP_ZONE_SLOTS = 2;
 let swapZone;         // { x, y, w, h, slotW, slotH, gap } 每格中心由 getSwapZoneSlotCenter 算
 let swapHistoryZone;  // 最下面已交換區 { x, y, w, h, pad, lineHeight }
 // 輸送帶（關卡預覽）：在已交換區上方，顯示接下來的關卡組
-const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧', 'Avatars', 'awe1', 'awe2', 'awe3', 'awe4', 'awe5', 'awe6', 'awe7', 'awe8', 'awe9', 'awe10', 'awe11', 'awe12', 'awe13', 'awe14', 'awe15', 'awe16', 'awe17', 'awe18', 'awe19', 'awe20', 'awe21', 'awe22', 'awe23', 'awe24', 'awe25', 'awe26', 'awe27', 'awe28', 'awe29', 'awe30'];
-// 關卡頭像：key = 關卡索引，value = 該關 3 種類型依序的圖片 URL。規則：第 N 關（index N-1）的頭像放在 public/avatars/{N}/ 底下，檔名 avatar_1.png、avatar_2.png、avatar_3.png
-const AVATAR_URLS_BY_LEVEL = { 22: ['/public/avatars/23/avatar_1.png', '/public/avatars/23/avatar_2.png', '/public/avatars/23/avatar_3.png'] };
+const LEVEL_GROUPS = ['ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQR', 'STU', 'VWX', '我愛你', '因為你', '你是妳', '可以嗎', '矮油啦', '當然好', '你早說', '阿不然', '親一個', '我不要', '親兩個', '才不要', '親三個', '那好吧', 'Avatars', 'awe1', 'awe2', 'awe3', 'awe4', 'awe5', 'awe6', 'awe7', 'awe8', 'awe9', 'awe10', 'awe11', 'awe12', 'awe13', 'awe14', 'awe15', 'awe16', 'awe17', 'awe18', 'awe19', 'awe20', 'awe21', 'awe22', 'awe23', 'awe24', 'awe25', 'awe26', 'awe27', 'awe28', 'awe29', 'awe30', '54', '55', '56', '57', '58', '59', '60', '61', '62', '63', '64', '65', '66', '67', '68', '69', '70', '71', '72', '73', '74', '75', '76', '77', '78', '79', '80', '81', '82', '83', '84', '85', '86', '87', '88', '89', '90', '91', '92', '93', '94', '95', '96', '97', '98'];
+// 關卡頭像：key = 關卡索引，value = 該關 3 種類型依序的圖片 URL。第 23 關用 avatar_1/2/3.png；54～98 關用 public/avatars/{關卡號}/ 底下 1,2,3 或 4,5,6 或 7,8,9.png
+const AVATAR_URLS_BY_LEVEL = (function () {
+  const o = { 22: ['/public/avatars/23/avatar_1.png', '/public/avatars/23/avatar_2.png', '/public/avatars/23/avatar_3.png'] };
+  for (let L = 53; L <= 97; L++) {
+    const folder = L + 1;
+    const r = (L - 53) % 3;
+    const base = r === 0 ? 1 : r === 1 ? 4 : 7;
+    o[L] = ['/public/avatars/' + folder + '/' + base + '.png', '/public/avatars/' + folder + '/' + (base + 1) + '.png', '/public/avatars/' + folder + '/' + (base + 2) + '.png'];
+  }
+  return o;
+})();
 let avatarImagesByLevel = {};  // 已載入的 PImage：avatarImagesByLevel[level][localIndex]
 // awe1～awe30（第 24～53 關）：從 Font Awesome 隨機選 3 個圖示，已用過的記錄在 localStorage 不重複
 const FONT_AWESOME_SLAB_ICONS = ['star', 'heart', 'bolt', 'fire', 'camera', 'music', 'gem', 'snowflake', 'sun', 'moon', 'cloud', 'leaf', 'tree', 'bug', 'cat', 'dog', 'fish', 'feather', 'football', 'basketball', 'baseball', 'chess-knight', 'chess-king', 'chess-queen', 'crown', 'gift', 'bell', 'key', 'lock', 'unlock', 'flag', 'bookmark', 'lightbulb', 'wand-magic-sparkles', 'star-half-stroke', 'thumbs-up', 'hand-point-right', 'circle', 'square', 'triangle', 'hexagon', 'certificate', 'medal', 'trophy', 'anchor', 'umbrella', 'snowman', 'star-of-life', 'magnet', 'flask', 'gear', 'wrench', 'hammer', 'screwdriver-wrench'];
@@ -993,6 +1032,23 @@ function setup() {
   btn.class('sound-toggle-btn');
   btn.parent(soundBarDiv);
   btn.elt.addEventListener('click', function () { enableSound(); });
+
+  // 54～98 關卡片底色灰階測試 UI（已關閉，改為固定 23% 灰階）
+  // const grayWrap = createDiv('');
+  // grayWrap.class('avatar-bg-gray-wrap');
+  // grayWrap.parent(soundBarDiv);
+  // const grayLabel = createSpan('灰階 0~100%');
+  // grayLabel.parent(grayWrap);
+  // const graySlider = createSlider(0, 100, 0, 1);
+  // graySlider.class('avatar-bg-gray-slider');
+  // graySlider.parent(grayWrap);
+  // const grayValue = createSpan('0%');
+  // grayValue.class('avatar-bg-gray-value');
+  // grayValue.parent(grayWrap);
+  // graySlider.elt.addEventListener('input', function () {
+  //   avatar5498BgGray = parseFloat(graySlider.value());
+  //   grayValue.elt.textContent = Math.round(avatar5498BgGray) + '%';
+  // });
 
   // 圖示大小 UI 暫時不需要，先 comment 掉
   // (function () {
@@ -1972,7 +2028,13 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
     drawingContext.shadowBlur = 12;
     drawingContext.shadowColor = 'rgba(0,0,0,0.4)';
   }
-  fill(t.color[0], t.color[1], t.color[2]);
+  // 54～98 關 Avatars 底色固定 23% 灰階
+  if (currentLevel >= 53 && currentLevel <= 97) {
+    const g = Math.round(255 * (1 - AVATAR_54_98_BG_GRAY / 100));
+    fill(g, g, g);
+  } else {
+    fill(t.color[0], t.color[1], t.color[2]);
+  }
   if (isHighlight) {
     stroke(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2]);
     strokeWeight(4);
