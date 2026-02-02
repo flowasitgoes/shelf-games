@@ -82,94 +82,95 @@ const ITEM_TYPES = [
   { id: 'av1', name: '①', color: [52, 152, 219] },
   { id: 'av2', name: '②', color: [241, 196, 15] },
   { id: 'av3', name: '③', color: [231, 76, 60] },
-  { id: 'slab1', name: '◇', color: [52, 152, 219] },
-  { id: 'slab2', name: '◇', color: [241, 196, 15] },
-  { id: 'slab3', name: '◇', color: [231, 76, 60] },
-  { id: 'slab4', name: '◇', color: [46, 204, 113] },
-  { id: 'slab5', name: '◇', color: [155, 89, 182] },
-  { id: 'slab6', name: '◇', color: [230, 126, 34] },
-  { id: 'slab7', name: '◇', color: [26, 188, 156] },
-  { id: 'slab8', name: '◇', color: [241, 148, 138] },
-  { id: 'slab9', name: '◇', color: [149, 165, 166] },
-  { id: 'slab10', name: '◇', color: [52, 73, 94] },
-  { id: 'slab11', name: '◇', color: [255, 154, 158] },
-  { id: 'slab12', name: '◇', color: [129, 199, 132] },
-  { id: 'slab13', name: '◇', color: [171, 71, 188] },
-  { id: 'slab14', name: '◇', color: [255, 213, 79] },
-  { id: 'slab15', name: '◇', color: [66, 165, 245] },
-  { id: 'slab16', name: '◇', color: [239, 83, 80] },
-  { id: 'slab17', name: '◇', color: [102, 187, 106] },
-  { id: 'slab18', name: '◇', color: [156, 39, 176] },
-  { id: 'slab19', name: '◇', color: [255, 167, 38] },
-  { id: 'slab20', name: '◇', color: [0, 188, 212] },
-  { id: 'slab21', name: '◇', color: [233, 30, 99] },
-  { id: 'slab22', name: '◇', color: [76, 175, 80] },
-  { id: 'slab23', name: '◇', color: [255, 235, 59] },
-  { id: 'slab24', name: '◇', color: [121, 85, 72] },
-  { id: 'slab25', name: '◇', color: [94, 53, 177] },
-  { id: 'slab26', name: '◇', color: [255, 152, 0] },
-  { id: 'slab27', name: '◇', color: [0, 137, 123] },
-  { id: 'slab28', name: '◇', color: [103, 58, 183] },
-  { id: 'slab29', name: '◇', color: [38, 166, 154] },
-  { id: 'slab30', name: '◇', color: [183, 28, 28] },
+  // awe1～awe30 關卡背景：隨機 hue (0–360)，S=45% L=68% 固定
+  { id: 'slab1', name: '◇', color: [210, 137, 145] },
+  { id: 'slab2', name: '◇', color: [149, 210, 137] },
+  { id: 'slab3', name: '◇', color: [137, 210, 203] },
+  { id: 'slab4', name: '◇', color: [204, 137, 210] },
+  { id: 'slab5', name: '◇', color: [137, 206, 210] },
+  { id: 'slab6', name: '◇', color: [137, 210, 143] },
+  { id: 'slab7', name: '◇', color: [210, 169, 137] },
+  { id: 'slab8', name: '◇', color: [181, 137, 210] },
+  { id: 'slab9', name: '◇', color: [210, 137, 138] },
+  { id: 'slab10', name: '◇', color: [206, 137, 210] },
+  { id: 'slab11', name: '◇', color: [137, 210, 193] },
+  { id: 'slab12', name: '◇', color: [210, 137, 160] },
+  { id: 'slab13', name: '◇', color: [210, 137, 184] },
+  { id: 'slab14', name: '◇', color: [210, 137, 150] },
+  { id: 'slab15', name: '◇', color: [137, 154, 210] },
+  { id: 'slab16', name: '◇', color: [175, 210, 137] },
+  { id: 'slab17', name: '◇', color: [137, 210, 198] },
+  { id: 'slab18', name: '◇', color: [149, 210, 137] },
+  { id: 'slab19', name: '◇', color: [183, 137, 210] },
+  { id: 'slab20', name: '◇', color: [210, 137, 195] },
+  { id: 'slab21', name: '◇', color: [137, 145, 210] },
+  { id: 'slab22', name: '◇', color: [187, 137, 210] },
+  { id: 'slab23', name: '◇', color: [191, 137, 210] },
+  { id: 'slab24', name: '◇', color: [137, 143, 210] },
+  { id: 'slab25', name: '◇', color: [137, 210, 189] },
+  { id: 'slab26', name: '◇', color: [210, 169, 137] },
+  { id: 'slab27', name: '◇', color: [140, 210, 137] },
+  { id: 'slab28', name: '◇', color: [193, 210, 137] },
+  { id: 'slab29', name: '◇', color: [175, 137, 210] },
+  { id: 'slab30', name: '◇', color: [210, 181, 137] },
   // awe12～awe30 關卡用（level 34～52，typeIndex 102～158）
-  { id: 'slab31', name: '◇', color: [52, 152, 219] },
-  { id: 'slab32', name: '◇', color: [241, 196, 15] },
-  { id: 'slab33', name: '◇', color: [231, 76, 60] },
-  { id: 'slab34', name: '◇', color: [46, 204, 113] },
-  { id: 'slab35', name: '◇', color: [155, 89, 182] },
-  { id: 'slab36', name: '◇', color: [230, 126, 34] },
-  { id: 'slab37', name: '◇', color: [26, 188, 156] },
-  { id: 'slab38', name: '◇', color: [241, 148, 138] },
-  { id: 'slab39', name: '◇', color: [149, 165, 166] },
-  { id: 'slab40', name: '◇', color: [52, 73, 94] },
-  { id: 'slab41', name: '◇', color: [255, 154, 158] },
-  { id: 'slab42', name: '◇', color: [129, 199, 132] },
-  { id: 'slab43', name: '◇', color: [171, 71, 188] },
-  { id: 'slab44', name: '◇', color: [255, 213, 79] },
-  { id: 'slab45', name: '◇', color: [66, 165, 245] },
-  { id: 'slab46', name: '◇', color: [239, 83, 80] },
-  { id: 'slab47', name: '◇', color: [102, 187, 106] },
-  { id: 'slab48', name: '◇', color: [156, 39, 176] },
-  { id: 'slab49', name: '◇', color: [255, 167, 38] },
-  { id: 'slab50', name: '◇', color: [0, 188, 212] },
-  { id: 'slab51', name: '◇', color: [233, 30, 99] },
-  { id: 'slab52', name: '◇', color: [76, 175, 80] },
-  { id: 'slab53', name: '◇', color: [255, 235, 59] },
-  { id: 'slab54', name: '◇', color: [121, 85, 72] },
-  { id: 'slab55', name: '◇', color: [94, 53, 177] },
-  { id: 'slab56', name: '◇', color: [255, 152, 0] },
-  { id: 'slab57', name: '◇', color: [0, 137, 123] },
-  { id: 'slab58', name: '◇', color: [103, 58, 183] },
-  { id: 'slab59', name: '◇', color: [38, 166, 154] },
-  { id: 'slab60', name: '◇', color: [183, 28, 28] },
-  { id: 'slab61', name: '◇', color: [85, 139, 47] },
-  { id: 'slab62', name: '◇', color: [97, 97, 97] },
-  { id: 'slab63', name: '◇', color: [55, 71, 79] },
-  { id: 'slab64', name: '◇', color: [255, 160, 0] },
-  { id: 'slab65', name: '◇', color: [2, 119, 189] },
-  { id: 'slab66', name: '◇', color: [142, 36, 170] },
-  { id: 'slab67', name: '◇', color: [211, 47, 47] },
-  { id: 'slab68', name: '◇', color: [51, 105, 30] },
-  { id: 'slab69', name: '◇', color: [0, 96, 100] },
-  { id: 'slab70', name: '◇', color: [245, 124, 0] },
-  { id: 'slab71', name: '◇', color: [93, 64, 55] },
-  { id: 'slab72', name: '◇', color: [194, 24, 91] },
-  { id: 'slab73', name: '◇', color: [198, 40, 40] },
-  { id: 'slab74', name: '◇', color: [123, 31, 162] },
-  { id: 'slab75', name: '◇', color: [0, 77, 64] },
-  { id: 'slab76', name: '◇', color: [251, 192, 45] },
-  { id: 'slab77', name: '◇', color: [109, 76, 65] },
-  { id: 'slab78', name: '◇', color: [30, 136, 229] },
-  { id: 'slab79', name: '◇', color: [229, 57, 53] },
-  { id: 'slab80', name: '◇', color: [106, 27, 154] },
-  { id: 'slab81', name: '◇', color: [0, 121, 107] },
-  { id: 'slab82', name: '◇', color: [255, 202, 40] },
-  { id: 'slab83', name: '◇', color: [78, 52, 46] },
-  { id: 'slab84', name: '◇', color: [62, 39, 35] },
-  { id: 'slab85', name: '◇', color: [115, 115, 115] },
-  { id: 'slab86', name: '◇', color: [255, 112, 67] },
-  { id: 'slab87', name: '◇', color: [244, 67, 54] }
+  { id: 'slab31', name: '◇', color: [161, 210, 137] },
+  { id: 'slab32', name: '◇', color: [210, 165, 137] },
+  { id: 'slab33', name: '◇', color: [137, 153, 210] },
+  { id: 'slab34', name: '◇', color: [210, 137, 169] },
+  { id: 'slab35', name: '◇', color: [137, 210, 143] },
+  { id: 'slab36', name: '◇', color: [191, 210, 137] },
+  { id: 'slab37', name: '◇', color: [210, 137, 137] },
+  { id: 'slab38', name: '◇', color: [143, 137, 210] },
+  { id: 'slab39', name: '◇', color: [200, 137, 210] },
+  { id: 'slab40', name: '◇', color: [210, 157, 137] },
+  { id: 'slab41', name: '◇', color: [137, 167, 210] },
+  { id: 'slab42', name: '◇', color: [153, 137, 210] },
+  { id: 'slab43', name: '◇', color: [210, 137, 164] },
+  { id: 'slab44', name: '◇', color: [210, 153, 137] },
+  { id: 'slab45', name: '◇', color: [137, 182, 210] },
+  { id: 'slab46', name: '◇', color: [210, 137, 180] },
+  { id: 'slab47', name: '◇', color: [137, 171, 210] },
+  { id: 'slab48', name: '◇', color: [210, 137, 206] },
+  { id: 'slab49', name: '◇', color: [137, 210, 193] },
+  { id: 'slab50', name: '◇', color: [169, 210, 137] },
+  { id: 'slab51', name: '◇', color: [167, 210, 137] },
+  { id: 'slab52', name: '◇', color: [137, 203, 210] },
+  { id: 'slab53', name: '◇', color: [160, 137, 210] },
+  { id: 'slab54', name: '◇', color: [149, 210, 137] },
+  { id: 'slab55', name: '◇', color: [210, 178, 137] },
+  { id: 'slab56', name: '◇', color: [210, 137, 200] },
+  { id: 'slab57', name: '◇', color: [137, 210, 182] },
+  { id: 'slab58', name: '◇', color: [210, 137, 183] },
+  { id: 'slab59', name: '◇', color: [210, 200, 137] },
+  { id: 'slab60', name: '◇', color: [210, 142, 137] },
+  { id: 'slab61', name: '◇', color: [203, 210, 137] },
+  { id: 'slab62', name: '◇', color: [177, 137, 210] },
+  { id: 'slab63', name: '◇', color: [137, 210, 177] },
+  { id: 'slab64', name: '◇', color: [165, 137, 210] },
+  { id: 'slab65', name: '◇', color: [137, 210, 180] },
+  { id: 'slab66', name: '◇', color: [210, 171, 137] },
+  { id: 'slab67', name: '◇', color: [137, 210, 150] },
+  { id: 'slab68', name: '◇', color: [210, 137, 146] },
+  { id: 'slab69', name: '◇', color: [210, 137, 148] },
+  { id: 'slab70', name: '◇', color: [182, 137, 210] },
+  { id: 'slab71', name: '◇', color: [151, 210, 137] },
+  { id: 'slab72', name: '◇', color: [210, 137, 137] },
+  { id: 'slab73', name: '◇', color: [137, 171, 210] },
+  { id: 'slab74', name: '◇', color: [210, 205, 137] },
+  { id: 'slab75', name: '◇', color: [137, 209, 210] },
+  { id: 'slab76', name: '◇', color: [210, 210, 137] },
+  { id: 'slab77', name: '◇', color: [208, 137, 210] },
+  { id: 'slab78', name: '◇', color: [210, 137, 172] },
+  { id: 'slab79', name: '◇', color: [182, 210, 137] },
+  { id: 'slab80', name: '◇', color: [181, 137, 210] },
+  { id: 'slab81', name: '◇', color: [153, 210, 137] },
+  { id: 'slab82', name: '◇', color: [180, 137, 210] },
+  { id: 'slab83', name: '◇', color: [210, 137, 155] },
+  { id: 'slab84', name: '◇', color: [210, 208, 137] },
+  { id: 'slab85', name: '◇', color: [210, 137, 194] },
+  { id: 'slab86', name: '◇', color: [210, 137, 160] },
+  { id: 'slab87', name: '◇', color: [137, 192, 210] }
 ];
 const TYPES_PER_LEVEL = 3;  // 每關 3 種
 const NUM_LEVELS = 53;      // 關卡數（…Avatars, awe1～awe30）
@@ -620,6 +621,60 @@ function playDropCancelSound() {
   const f = pitchFreq(180);
   playTone(f, 0.06, 'sine', 0.08);
   playPadChord(f, 0.1, 0.05);
+}
+
+// 拖曳時滑過其他卡片（思考是否要 drop）— 可愛療癒、略帶「選過」的輕柔音效
+function playDragHoverSound() {
+  if (!soundEnabled) return;
+  try {
+    const ctx = getAudioContext();
+    const f0 = pitchFreq(255);   // 低頻基音，稍微低一點
+    const f1 = pitchFreq(370);   // 主音（溫暖中音）
+    const f2 = pitchFreq(480);   // 高一點的和音
+    function playNow() {
+      const t0 = ctx.currentTime;
+      const dur = 0.07;
+      const vol = 0.068;
+      const attack = 0.012;   // 稍長起音，更圓潤
+      const osc0 = ctx.createOscillator();
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain0 = ctx.createGain();
+      const gain1 = ctx.createGain();
+      const gain2 = ctx.createGain();
+      osc0.type = 'triangle';  // 三角形波較圓潤
+      osc1.type = 'triangle';  // 主音也用 triangle，更圓潤
+      osc2.type = 'sine';
+      osc0.frequency.value = f0;
+      osc1.frequency.value = f1;
+      osc2.frequency.value = f2;
+      gain0.gain.setValueAtTime(0.001, t0);
+      gain0.gain.linearRampToValueAtTime(vol * 0.65, t0 + attack);
+      gain0.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      gain1.gain.setValueAtTime(0.001, t0);
+      gain1.gain.linearRampToValueAtTime(vol, t0 + attack);
+      gain1.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+      gain2.gain.setValueAtTime(0.001, t0 + 0.012);
+      gain2.gain.linearRampToValueAtTime(vol * 0.4, t0 + 0.012 + attack);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t0 + dur * 0.88);
+      osc0.connect(gain0);
+      gain0.connect(ctx.destination);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc0.start(t0);
+      osc1.start(t0);
+      osc2.start(t0 + 0.012);
+      osc0.stop(t0 + dur);
+      osc1.stop(t0 + dur);
+      osc2.stop(t0 + dur);
+    }
+    if (ctx.state === 'suspended') ctx.resume().then(playNow).catch(function () { playNow(); });
+    else playNow();
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.warn) console.warn('playDragHoverSound:', e);
+  }
 }
 
 function playLevelCompleteSound() {
@@ -1231,9 +1286,10 @@ function draw() {
     hoverTargetItem = hitTestItemExcluding(pointerX, pointerY, draggedItem.cellIndex, draggedItem.slotIndex);
     // 不允許櫃內交換：若滑鼠在「同一櫃」的其他格上，不亮起（讓使用者知道不能櫃內交換）
     if (hoverTargetItem && hoverTargetItem.cellIndex === draggedItem.cellIndex) hoverTargetItem = null;
-    // 亮起來變化時記錄：從無→有 或 從 A→B
+    // 亮起來變化時記錄：從無→有 或 從 A→B，並播放「滑過此格」的輕柔選取音效
     if (hoverTargetItem && (!prevHoverTargetItem || prevHoverTargetItem.cellIndex !== hoverTargetItem.cellIndex || prevHoverTargetItem.slotIndex !== hoverTargetItem.slotIndex)) {
       pushHighlightLog(hoverTargetItem.cellIndex, hoverTargetItem.slotIndex, '拖曳滑過此格 (pointer 在物品上)');
+      playDragHoverSound();
     }
     prevHoverTargetItem = hoverTargetItem;
   } else {
