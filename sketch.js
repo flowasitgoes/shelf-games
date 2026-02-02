@@ -1210,25 +1210,88 @@ function easeOutBack(t) {
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 }
 
+// 拋物線＋遠近感：回傳 { x, y, scale }，progress 0~1。弧高（像素）、終點略縮
+const DROP_ARC_HEIGHT = 55;
+const DROP_SCALE_MIN = 0.38;
+const DROP_TRAIL_STEPS = 12;
+
+function getDropPosition(da, progress) {
+  const eased = easeOutBack(progress);
+  const linearX = da.startX + (da.endX - da.startX) * eased;
+  const linearY = da.startY + (da.endY - da.startY) * eased;
+  const arc = 4 * progress * (1 - progress);
+  const arcY = -DROP_ARC_HEIGHT * arc;
+  const x = linearX;
+  const y = linearY + arcY;
+  const scaleAmt = 1 - (1 - DROP_SCALE_MIN) * arc;
+  const landProgress = Math.max(0, (progress - 0.82) / 0.18);
+  const landScale = 0.88 + 0.12 * (1 - (1 - landProgress) * (1 - landProgress));
+  const scale = progress >= 0.82 ? landScale : scaleAmt;
+  return { x, y, scale };
+}
+
+// 有機曲線軌跡：用 progress 取樣路徑上的點，畫一條漸隱的曲線（從舊到新，越後面越亮）
+function drawDropOrganicTrail(da, currentProgress) {
+  const pts = [];
+  for (let i = 0; i <= DROP_TRAIL_STEPS; i++) {
+    const p = Math.max(0, currentProgress - 0.4 * (1 - i / DROP_TRAIL_STEPS));
+    pts.push(getDropPosition(da, p));
+  }
+  noFill();
+  for (let i = 1; i < pts.length; i++) {
+    const alpha = (70 + 50 * organicNoise(currentProgress * 10, i)) * (i / pts.length) * (i / pts.length);
+    stroke(255, 248, 230, alpha);
+    strokeWeight(2.5 - 1.2 * (i / pts.length));
+    line(pts[i - 1].x, pts[i - 1].y, pts[i].x, pts[i].y);
+  }
+  noStroke();
+}
+
+// 咖啡豆／錢幣「轉進深處」的有機線條：從飛行物後方拉出的弧線
+function drawDropOrganicLines(da, x, y, progress) {
+  const dx = da.endX - da.startX;
+  const dy = da.endY - da.startY;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const ux = -dx / len;
+  const uy = -dy / len;
+  const phase = progress * TWO_PI * 2 + millis() * 0.003;
+  for (let i = 0; i < 5; i++) {
+    const angle = (i / 5) * PI * 0.8 - PI * 0.4 + 0.15 * sin(phase + i * 2);
+    const dirX = ux * cos(angle) - uy * sin(angle);
+    const dirY = ux * sin(angle) + uy * cos(angle);
+    const segLen = 18 + 14 * organicNoise(progress * 12, i) + 8 * sin(phase + i);
+    const cpx = x + dirX * segLen * 0.5 + 6 * sin(phase + i * 1.7);
+    const cpy = y + dirY * segLen * 0.5 + 5 * cos(phase + i * 1.3);
+    const ex = x + dirX * segLen + 4 * organicNoise(phase, i + 10);
+    const ey = y + dirY * segLen + 4 * organicNoise(phase, i + 20);
+    const alpha = (1 - progress) * (70 + 40 * organicNoise(phase, i));
+    stroke(255, 245, 220, alpha);
+    strokeWeight(1.5 + 0.5 * organicNoise(phase, i + 5));
+    noFill();
+    bezier(x, y, cpx, cpy, cpx + 3 * sin(phase * 2), cpy + 3 * cos(phase * 2), ex, ey);
+  }
+  noStroke();
+}
+
 function drawDropAnimation() {
   if (!dropAnimation) return;
-  const t = millis() - dropAnimation.startTime;
+  const da = dropAnimation;
+  const t = millis() - da.startTime;
   const dur = DROP_ANIMATION_DURATION_MS;
   let progress = t / dur;
   if (progress >= 1) {
     finishDropAnimation();
     return;
   }
-  const eased = easeOutBack(progress);
-  const x = dropAnimation.startX + (dropAnimation.endX - dropAnimation.startX) * eased;
-  const y = dropAnimation.startY + (dropAnimation.endY - dropAnimation.startY) * eased;
+  const pos = getDropPosition(da, progress);
   const rotation = TWO_PI * progress;
-  const scaleAmt = 1 + 0.12 * sin(PI * progress);
+  drawDropOrganicTrail(da, progress);
+  drawDropOrganicLines(da, pos.x, pos.y, progress);
   push();
-  translate(x, y);
+  translate(pos.x, pos.y);
   rotate(rotation);
-  scale(scaleAmt);
-  drawOneItem(0, 0, dropAnimation.typeIndex, false, false);
+  scale(pos.scale);
+  drawOneItem(0, 0, da.typeIndex, false, false);
   pop();
 }
 
