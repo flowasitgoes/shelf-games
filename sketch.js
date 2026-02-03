@@ -245,6 +245,13 @@ let replayBtn;       // 再玩一次按鈕區域 { x, y, w, h }
 let audioCtx = null; // Web Audio 用於拖放音效（首次使用者操作時建立並 resume）
 let soundEnabled = false; // 使用者點「開啟音效」後才播放
 let soundBarDiv = null;   // 正上方音效按鈕列
+let timeDisplayEl = null; // 時間顯示（在聲音按鈕下方）
+let winConditionHintEl = null; // 過關提示 overlay（正上方）
+let winConditionHintShownAt = null; // 首次顯示時間（1 分鐘後淡出）
+let winConditionHintFadeStart = null; // 淡出開始時間
+let winConditionHintLastText = null;  // 上次設定的文字，避免每幀改 DOM 造成 repaint
+const WIN_HINT_DISPLAY_MS = 60000;   // 顯示 1 分鐘
+const WIN_HINT_FADE_MS = 2000;       // 淡出歷時 2 秒
 // 拖曳滑過卡片音效參數（可被 UI 動態調整）
 let dragHoverSoundParams = {
   f0: 255,      // 低音 Hz
@@ -644,6 +651,126 @@ function normalizeHex(hex) {
   if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
   if (hex.length !== 6) return '#000000';
   return '#' + hex.toLowerCase();
+}
+
+// awe1-30 卡片「背景填色」明度／飽和度（只於櫃0顯示動態變化以省效能）
+let slabBgLightnessScale = 1;
+let slabBgSaturationScale = 1;
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  var max = Math.max(r, g, b);
+  var min = Math.min(r, g, b);
+  var h, s, l = (max + min) / 2;
+  if (max === min) {
+    h = s = 0;
+  } else {
+    var d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  return { h: h * 360, s: s, l: l };
+}
+function hslToRgb(h, s, l) {
+  h = h / 360;
+  var r, g, b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    function hue2rgb(p, q, t) {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    }
+    var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    var p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  return [Math.round(Math.max(0, Math.min(1, r)) * 255), Math.round(Math.max(0, Math.min(1, g)) * 255), Math.round(Math.max(0, Math.min(1, b)) * 255)];
+}
+// awe1-30 櫃0 的卡片背景色（套用明度／飽和度）；非櫃0 或非 awe 關卡回傳 null，由呼叫方用 t.color
+function getSlabCardBgColor(typeIndex, cellIndex) {
+  if (typeof currentLevel === 'undefined' || currentLevel < SLAB_LEVEL_FIRST || currentLevel > SLAB_LEVEL_LAST) return null;
+  if (cellIndex !== 0) return null;
+  var t = ITEM_TYPES[typeIndex];
+  if (!t || !t.color) return null;
+  var hsl = rgbToHsl(t.color[0], t.color[1], t.color[2]);
+  var L = Math.max(0, Math.min(1, hsl.l * slabBgLightnessScale));
+  var S = Math.max(0, Math.min(1, hsl.s * slabBgSaturationScale));
+  return hslToRgb(hsl.h, S, L);
+}
+
+// awe11-30 明度／飽和度調整（0.5~1.5、0~2）。awe11-20 明度預設 70%，awe21-30 預設 100%
+let slabLightnessScaleBronze = 0.7;
+let slabLightnessScaleGold = 1;
+let slabSaturationScale = 1;
+function hexToHsl(hex) {
+  hex = normalizeHex(hex);
+  var r = parseInt(hex.slice(1, 3), 16) / 255;
+  var g = parseInt(hex.slice(3, 5), 16) / 255;
+  var b = parseInt(hex.slice(5, 7), 16) / 255;
+  var max = Math.max(r, g, b);
+  var min = Math.min(r, g, b);
+  var h, s, l = (max + min) / 2;
+  if (max === min) {
+    h = s = 0;
+  } else {
+    var d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+    else if (max === g) h = ((b - r) / d + 2) / 6;
+    else h = ((r - g) / d + 4) / 6;
+  }
+  return { h: h * 360, s: s, l: l };
+}
+function hslToHex(h, s, l) {
+  h = h / 360;
+  var r, g, b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    function hue2rgb(p, q, t) {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    }
+    var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    var p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  function toHex(n) {
+    var v = Math.round(Math.max(0, Math.min(1, n)) * 255);
+    return (v < 16 ? '0' : '') + v.toString(16);
+  }
+  return '#' + toHex(r) + toHex(g) + toHex(b);
+}
+// 依目前明度／飽和度 scale 從 base stops 算出顏色並寫入 live，只刷新單一關卡（櫃0 可見）以省效能
+function applySlabHSLAndRefreshOneLevel() {
+  var LBronze = Math.max(0, Math.min(2, slabLightnessScaleBronze));
+  var LGold = Math.max(0, Math.min(2, slabLightnessScaleGold));
+  var SScale = Math.max(0, Math.min(2, slabSaturationScale));
+  var i;
+  for (i = 0; i < SLAB_ICON_GRADIENT_STOPS_BRONZE.length; i++) {
+    var hsl = hexToHsl(SLAB_ICON_GRADIENT_STOPS_BRONZE[i].color);
+    slabGradientStopsBronzeLive[i].color = hslToHex(hsl.h, Math.min(1, hsl.s * SScale), Math.min(1, hsl.l * LBronze));
+  }
+  for (i = 0; i < SLAB_ICON_GRADIENT_STOPS_GOLD.length; i++) {
+    var hsl2 = hexToHsl(SLAB_ICON_GRADIENT_STOPS_GOLD[i].color);
+    slabGradientStopsGoldLive[i].color = hslToHex(hsl2.h, Math.min(1, hsl2.s * SScale), Math.min(1, hsl2.l * LGold));
+  }
+  var L = (typeof currentLevel !== 'undefined' && currentLevel >= 33 && currentLevel <= 52) ? currentLevel : 33;
+  refreshSlabIconsForLevelRange(L, L);
 }
 
 // 確保 awe1～awe30 共 30 關都選好圖示並開始載入；清單存 localStorage，重整後不變、利於快取
@@ -1175,191 +1302,276 @@ function setup() {
   soundBarDiv.class('sound-bar');
   soundBarDiv.parent(soundAndCanvas);
 
-  // 背景音樂參數 UI（在音效按鈕左側，可動態調整）
-  (function () {
-    const wrap = createDiv('');
-    wrap.class('drag-hover-params-wrap');
-    wrap.parent(soundBarDiv);
-    const bgPreset = DRAG_HOVER_PRESETS['背景音樂'];
+  const soundAndTimeWrap = createDiv('');
+  soundAndTimeWrap.class('sound-and-time-wrap');
+  soundAndTimeWrap.parent(soundBarDiv);
 
-    const paramRows = [];
-    function addSlider(label, key, min, max, step, format) {
-      const row = createDiv('');
-      row.class('drag-hover-param-row');
-      row.parent(wrap);
-      const labelSpan = createSpan(label);
-      labelSpan.parent(row);
-      const slider = createSlider(min, max, bgPreset[key], step);
-      slider.class('drag-hover-slider');
-      slider.parent(row);
-      const valueSpan = createSpan(format(bgPreset[key]));
-      valueSpan.class('drag-hover-value');
-      valueSpan.parent(row);
-      function update() {
-        const v = parseFloat(slider.value());
-        bgPreset[key] = v;
-        valueSpan.elt.textContent = format(v);
-      }
-      slider.elt.addEventListener('input', update);
-      paramRows.push({ key, slider, valueSpan, format });
-      return { slider, valueSpan, update };
-    }
-    addSlider('低音', 'f0', 150, 450, 5, function (v) { return Math.round(v) + ' Hz'; });
-    addSlider('主音', 'f1', 250, 650, 5, function (v) { return Math.round(v) + ' Hz'; });
-    addSlider('高音', 'f2', 350, 850, 5, function (v) { return Math.round(v) + ' Hz'; });
-    addSlider('音量', 'vol', 0.01, 0.2, 0.005, function (v) { return (v * 100).toFixed(1) + '%'; });
-    addSlider('時長', 'dur', 0.03, 0.15, 0.005, function (v) { return v.toFixed(2) + 's'; });
-    addSlider('起音', 'attack', 0.002, 0.03, 0.001, function (v) { return v.toFixed(3) + 's'; });
+  // 背景音樂 UI 暫時用不到，先 comment 掉
+  // (function () {
+  //   const wrap = createDiv('');
+  //   wrap.class('drag-hover-params-wrap');
+  //   wrap.parent(soundBarDiv);
+  //   const bgPreset = DRAG_HOVER_PRESETS['背景音樂'];
 
-    // 預設選單：「預設」還原背景音樂預設值，「背景音樂」同步顯示目前值
-    const presetRow = createDiv('');
-    presetRow.class('drag-hover-param-row drag-hover-preset-row');
-    presetRow.parent(wrap);
-    const presetLabel = createSpan('預設');
-    presetLabel.parent(presetRow);
-    const presetSelect = createSelect();
-    presetSelect.parent(presetRow);
-    presetSelect.option('預設');
-    presetSelect.option('背景音樂');
-    presetSelect.class('drag-hover-preset-select');
-    presetSelect.elt.addEventListener('change', function () {
-      const isReset = presetSelect.value() === '預設';
-      const source = isReset ? BACKGROUND_MUSIC_DEFAULT : bgPreset;
-      for (let i = 0; i < paramRows.length; i++) {
-        const pr = paramRows[i];
-        const v = source[pr.key];
-        if (v !== undefined) {
-          bgPreset[pr.key] = v;
-          pr.slider.value(v);
-          pr.valueSpan.elt.textContent = pr.format(v);
-        }
-      }
-    });
+  //   const paramRows = [];
+  //   function addSlider(label, key, min, max, step, format) {
+  //     const row = createDiv('');
+  //     row.class('drag-hover-param-row');
+  //     row.parent(wrap);
+  //     const labelSpan = createSpan(label);
+  //     labelSpan.parent(row);
+  //     const slider = createSlider(min, max, bgPreset[key], step);
+  //     slider.class('drag-hover-slider');
+  //     slider.parent(row);
+  //     const valueSpan = createSpan(format(bgPreset[key]));
+  //     valueSpan.class('drag-hover-value');
+  //     valueSpan.parent(row);
+  //     function update() {
+  //       const v = parseFloat(slider.value());
+  //       bgPreset[key] = v;
+  //       valueSpan.elt.textContent = format(v);
+  //     }
+  //     slider.elt.addEventListener('input', update);
+  //     paramRows.push({ key, slider, valueSpan, format });
+  //     return { slider, valueSpan, update };
+  //   }
+  //   addSlider('低音', 'f0', 150, 450, 5, function (v) { return Math.round(v) + ' Hz'; });
+  //   addSlider('主音', 'f1', 250, 650, 5, function (v) { return Math.round(v) + ' Hz'; });
+  //   addSlider('高音', 'f2', 350, 850, 5, function (v) { return Math.round(v) + ' Hz'; });
+  //   addSlider('音量', 'vol', 0.01, 0.2, 0.005, function (v) { return (v * 100).toFixed(1) + '%'; });
+  //   addSlider('時長', 'dur', 0.03, 0.15, 0.005, function (v) { return v.toFixed(2) + 's'; });
+  //   addSlider('起音', 'attack', 0.002, 0.03, 0.001, function (v) { return v.toFixed(3) + 's'; });
 
-    const previewRow = createDiv('');
-    previewRow.class('drag-hover-param-row drag-hover-preview-row');
-    previewRow.parent(wrap);
-    const checkbox = createCheckbox(DRAG_HOVER_PREVIEW_BPM + ' BPM 預覽', false);
-    checkbox.class('drag-hover-preview-checkbox');
-    checkbox.parent(previewRow);
-    checkbox.elt.addEventListener('change', function () {
-      if (checkbox.checked()) {
-        if (dragHoverPreviewInterval != null) clearInterval(dragHoverPreviewInterval);
-        const msPerBeat = Math.round(60000 / DRAG_HOVER_PREVIEW_BPM);
-        dragHoverPreviewInterval = setInterval(function () {
-          playDragHoverSound(true, '背景音樂', { f0: 300 + Math.random() * (450 - 300), f2: backgroundMusicF2ThisLevel });
-        }, msPerBeat);
-      } else {
-        if (dragHoverPreviewInterval != null) {
-          clearInterval(dragHoverPreviewInterval);
-          dragHoverPreviewInterval = null;
-        }
-      }
-    });
-  })();
+  //   // 預設選單：「預設」還原背景音樂預設值，「背景音樂」同步顯示目前值
+  //   const presetRow = createDiv('');
+  //   presetRow.class('drag-hover-param-row drag-hover-preset-row');
+  //   presetRow.parent(wrap);
+  //   const presetLabel = createSpan('預設');
+  //   presetLabel.parent(presetRow);
+  //   const presetSelect = createSelect();
+  //   presetSelect.parent(presetRow);
+  //   presetSelect.option('預設');
+  //   presetSelect.option('背景音樂');
+  //   presetSelect.class('drag-hover-preset-select');
+  //   presetSelect.elt.addEventListener('change', function () {
+  //     const isReset = presetSelect.value() === '預設';
+  //     const source = isReset ? BACKGROUND_MUSIC_DEFAULT : bgPreset;
+  //     for (let i = 0; i < paramRows.length; i++) {
+  //       const pr = paramRows[i];
+  //       const v = source[pr.key];
+  //       if (v !== undefined) {
+  //         bgPreset[pr.key] = v;
+  //         pr.slider.value(v);
+  //         pr.valueSpan.elt.textContent = pr.format(v);
+  //       }
+  //     }
+  //   });
 
-  // awe 填色 UI（在調整背景音樂下方）：Bronze awe11-20、Gold awe21-30 關鍵色可動態調整
-  (function () {
-    const wrap = createDiv('');
-    wrap.class('awe-fill-params-wrap');
-    wrap.parent(soundBarDiv);
-    const title = createDiv('awe 填色');
-    title.class('awe-fill-title');
-    title.parent(wrap);
+  //   const previewRow = createDiv('');
+  //   previewRow.class('drag-hover-param-row drag-hover-preview-row');
+  //   previewRow.parent(wrap);
+  //   const checkbox = createCheckbox(DRAG_HOVER_PREVIEW_BPM + ' BPM 預覽', false);
+  //   checkbox.class('drag-hover-preview-checkbox');
+  //   checkbox.parent(previewRow);
+  //   checkbox.elt.addEventListener('change', function () {
+  //     if (checkbox.checked()) {
+  //       if (dragHoverPreviewInterval != null) clearInterval(dragHoverPreviewInterval);
+  //       const msPerBeat = Math.round(60000 / DRAG_HOVER_PREVIEW_BPM);
+  //       dragHoverPreviewInterval = setInterval(function () {
+  //         playDragHoverSound(true, '背景音樂', { f0: 300 + Math.random() * (450 - 300), f2: backgroundMusicF2ThisLevel });
+  //       }, msPerBeat);
+  //     } else {
+  //       if (dragHoverPreviewInterval != null) {
+  //         clearInterval(dragHoverPreviewInterval);
+  //         dragHoverPreviewInterval = null;
+  //       }
+  //     }
+  //   });
+  // })();
 
-    function addColorRow(parentEl, label, keyIndex, isBronze, defaultHex) {
-      const row = createDiv('');
-      row.class('awe-fill-row');
-      row.parent(parentEl);
-      const labelSpan = createSpan(label);
-      labelSpan.class('awe-fill-label');
-      labelSpan.parent(row);
-      const colorInput = createInput(defaultHex, 'color');
-      colorInput.class('awe-fill-color');
-      colorInput.parent(row);
-      const hexInput = createInput(defaultHex, 'text');
-      hexInput.class('awe-fill-hex');
-      hexInput.parent(row);
-      function syncFromColorPicker() {
-        var hex = colorInput.value();
-        hexInput.value(hex);
-        if (isBronze) updateSlabLiveStopsBronzeKey(keyIndex, hex);
-        else updateSlabLiveStopsGoldKey(keyIndex, hex);
-      }
-      function syncFromHexInput() {
-        var hex = normalizeHex(hexInput.value());
-        hexInput.value(hex);
-        colorInput.value(hex);
-        if (isBronze) updateSlabLiveStopsBronzeKey(keyIndex, hex);
-        else updateSlabLiveStopsGoldKey(keyIndex, hex);
-      }
-      colorInput.elt.addEventListener('input', syncFromColorPicker);
-      hexInput.elt.addEventListener('change', syncFromHexInput);
-      hexInput.elt.addEventListener('blur', syncFromHexInput);
-    }
+  // 調整 awe1-30 背景填色 明度／飽和度 UI 暫時用不到，先 comment 掉
+  // (function () {
+  //   const wrap = createDiv('');
+  //   wrap.class('awe-bg-hsl-wrap');
+  //   wrap.parent(soundBarDiv);
+  //   const title = createSpan('awe1-30 背景填色 明度／飽和度');
+  //   title.class('awe-bg-hsl-title');
+  //   title.parent(wrap);
+  //   const row1 = createDiv('');
+  //   row1.class('awe-bg-hsl-row');
+  //   row1.parent(wrap);
+  //   const lightLabel = createSpan('明度');
+  //   lightLabel.parent(row1);
+  //   const lightSlider = createSlider(0.5, 1.5, 1, 0.05);
+  //   lightSlider.class('awe-bg-hsl-slider');
+  //   lightSlider.parent(row1);
+  //   const lightValue = createSpan('100%');
+  //   lightValue.class('awe-bg-hsl-value');
+  //   lightValue.parent(row1);
+  //   const row2 = createDiv('');
+  //   row2.class('awe-bg-hsl-row');
+  //   row2.parent(wrap);
+  //   const satLabel = createSpan('飽和度');
+  //   satLabel.parent(row2);
+  //   const satSlider = createSlider(0, 2, 1, 0.05);
+  //   satSlider.class('awe-bg-hsl-slider');
+  //   satSlider.parent(row2);
+  //   const satValue = createSpan('100%');
+  //   satValue.class('awe-bg-hsl-value');
+  //   satValue.parent(row2);
+  //   lightSlider.elt.addEventListener('input', function () {
+  //     slabBgLightnessScale = parseFloat(lightSlider.value());
+  //     lightValue.elt.textContent = Math.round(slabBgLightnessScale * 100) + '%';
+  //   });
+  //   satSlider.elt.addEventListener('input', function () {
+  //     slabBgSaturationScale = parseFloat(satSlider.value());
+  //     satValue.elt.textContent = Math.round(slabBgSaturationScale * 100) + '%';
+  //   });
+  // })();
 
-    const bronzeSection = createDiv('');
-    bronzeSection.class('awe-fill-section');
-    bronzeSection.parent(wrap);
-    const bronzeTitle = createSpan('Bronze (awe11-20)');
-    bronzeTitle.class('awe-fill-section-title');
-    bronzeTitle.parent(bronzeSection);
-    addColorRow(bronzeSection, '主色', 0, true, SLAB_BRONZE_KEY_DEFAULTS[0]);
-    addColorRow(bronzeSection, '淺色', 1, true, SLAB_BRONZE_KEY_DEFAULTS[1]);
-    addColorRow(bronzeSection, '深色', 2, true, SLAB_BRONZE_KEY_DEFAULTS[2]);
-    const bronzeReset = createButton('預設');
-    bronzeReset.class('awe-fill-reset');
-    bronzeReset.parent(bronzeSection);
-    bronzeReset.elt.addEventListener('click', function () {
-      for (var i = 0; i < SLAB_BRONZE_KEY_DEFAULTS.length; i++) {
-        for (var k = 0; k < SLAB_BRONZE_KEY_INDICES[i].length; k++) {
-          var idx = SLAB_BRONZE_KEY_INDICES[i][k];
-          slabGradientStopsBronzeLive[idx].color = SLAB_BRONZE_KEY_DEFAULTS[i];
-        }
-      }
-      refreshSlabIconsForLevelRange(33, 33);
-      var rows = bronzeSection.elt.querySelectorAll('.awe-fill-row');
-      for (var i = 0; i < 3 && i < rows.length; i++) {
-        var colorInp = rows[i].querySelector('.awe-fill-color');
-        var hexInp = rows[i].querySelector('.awe-fill-hex');
-        if (colorInp) colorInp.value = SLAB_BRONZE_KEY_DEFAULTS[i];
-        if (hexInp) hexInp.value = SLAB_BRONZE_KEY_DEFAULTS[i];
-      }
-    });
+  // 調整 awe11-30 明度／飽和度 UI 暫時用不到，先 comment 掉
+  // (function () {
+  //   const wrap = createDiv('');
+  //   wrap.class('awe-hsl-wrap');
+  //   wrap.parent(soundBarDiv);
+  //   const title = createSpan('awe11-30 明度／飽和度');
+  //   title.class('awe-hsl-title');
+  //   title.parent(wrap);
+  //   const row1 = createDiv('');
+  //   row1.class('awe-hsl-row');
+  //   row1.parent(wrap);
+  //   const lightLabel = createSpan('明度');
+  //   lightLabel.parent(row1);
+  //   const lightSlider = createSlider(0.5, 1.5, 1, 0.05);
+  //   lightSlider.class('awe-hsl-slider');
+  //   lightSlider.parent(row1);
+  //   const lightValue = createSpan('100%');
+  //   lightValue.class('awe-hsl-value');
+  //   lightValue.parent(row1);
+  //   const row2 = createDiv('');
+  //   row2.class('awe-hsl-row');
+  //   row2.parent(wrap);
+  //   const satLabel = createSpan('飽和度');
+  //   satLabel.parent(row2);
+  //   const satSlider = createSlider(0, 2, 1, 0.05);
+  //   satSlider.class('awe-hsl-slider');
+  //   satSlider.parent(row2);
+  //   const satValue = createSpan('100%');
+  //   satValue.class('awe-hsl-value');
+  //   satValue.parent(row2);
+  //   function updateFromSliders() {
+  //     slabLightnessScale = parseFloat(lightSlider.value());
+  //     slabSaturationScale = parseFloat(satSlider.value());
+  //     lightValue.elt.textContent = Math.round(slabLightnessScale * 100) + '%';
+  //     satValue.elt.textContent = Math.round(slabSaturationScale * 100) + '%';
+  //     applySlabHSLAndRefreshOneLevel();
+  //   }
+  //   lightSlider.elt.addEventListener('input', updateFromSliders);
+  //   satSlider.elt.addEventListener('input', updateFromSliders);
+  // })();
 
-    const goldSection = createDiv('');
-    goldSection.class('awe-fill-section');
-    goldSection.parent(wrap);
-    const goldTitle = createSpan('Gold (awe21-30)');
-    goldTitle.class('awe-fill-section-title');
-    goldTitle.parent(goldSection);
-    addColorRow(goldSection, '主色', 0, false, SLAB_GOLD_KEY_DEFAULTS[0]);
-    addColorRow(goldSection, '白', 1, false, SLAB_GOLD_KEY_DEFAULTS[1]);
-    addColorRow(goldSection, '深色', 2, false, SLAB_GOLD_KEY_DEFAULTS[2]);
-    const goldReset = createButton('預設');
-    goldReset.class('awe-fill-reset');
-    goldReset.parent(goldSection);
-    goldReset.elt.addEventListener('click', function () {
-      for (var i = 0; i < SLAB_GOLD_KEY_DEFAULTS.length; i++) {
-        for (var k = 0; k < SLAB_GOLD_KEY_INDICES[i].length; k++) {
-          var idx = SLAB_GOLD_KEY_INDICES[i][k];
-          slabGradientStopsGoldLive[idx].color = SLAB_GOLD_KEY_DEFAULTS[i];
-        }
-      }
-      refreshSlabIconsForLevelRange(43, 43);
-      var rows = goldSection.elt.querySelectorAll('.awe-fill-row');
-      for (var i = 0; i < 3 && i < rows.length; i++) {
-        var colorInp = rows[i].querySelector('.awe-fill-color');
-        var hexInp = rows[i].querySelector('.awe-fill-hex');
-        if (colorInp) colorInp.value = SLAB_GOLD_KEY_DEFAULTS[i];
-        if (hexInp) hexInp.value = SLAB_GOLD_KEY_DEFAULTS[i];
-      }
-    });
-  })();
+  // awe 填色 UI 暫時用不到，先 comment 掉
+  // (function () {
+  //   const wrap = createDiv('');
+  //   wrap.class('awe-fill-params-wrap');
+  //   wrap.parent(soundBarDiv);
+  //   const title = createDiv('awe 填色');
+  //   title.class('awe-fill-title');
+  //   title.parent(wrap);
+
+  //   function addColorRow(parentEl, label, keyIndex, isBronze, defaultHex) {
+  //     const row = createDiv('');
+  //     row.class('awe-fill-row');
+  //     row.parent(parentEl);
+  //     const labelSpan = createSpan(label);
+  //     labelSpan.class('awe-fill-label');
+  //     labelSpan.parent(row);
+  //     const colorInput = createInput(defaultHex, 'color');
+  //     colorInput.class('awe-fill-color');
+  //     colorInput.parent(row);
+  //     const hexInput = createInput(defaultHex, 'text');
+  //     hexInput.class('awe-fill-hex');
+  //     hexInput.parent(row);
+  //     function syncFromColorPicker() {
+  //       var hex = colorInput.value();
+  //       hexInput.value(hex);
+  //       if (isBronze) updateSlabLiveStopsBronzeKey(keyIndex, hex);
+  //       else updateSlabLiveStopsGoldKey(keyIndex, hex);
+  //     }
+  //     function syncFromHexInput() {
+  //       var hex = normalizeHex(hexInput.value());
+  //       hexInput.value(hex);
+  //       colorInput.value(hex);
+  //       if (isBronze) updateSlabLiveStopsBronzeKey(keyIndex, hex);
+  //       else updateSlabLiveStopsGoldKey(keyIndex, hex);
+  //     }
+  //     colorInput.elt.addEventListener('input', syncFromColorPicker);
+  //     hexInput.elt.addEventListener('change', syncFromHexInput);
+  //     hexInput.elt.addEventListener('blur', syncFromHexInput);
+  //   }
+
+  //   const bronzeSection = createDiv('');
+  //   bronzeSection.class('awe-fill-section');
+  //   bronzeSection.parent(wrap);
+  //   const bronzeTitle = createSpan('Bronze (awe11-20)');
+  //   bronzeTitle.class('awe-fill-section-title');
+  //   bronzeTitle.parent(bronzeSection);
+  //   addColorRow(bronzeSection, '主色', 0, true, SLAB_BRONZE_KEY_DEFAULTS[0]);
+  //   addColorRow(bronzeSection, '淺色', 1, true, SLAB_BRONZE_KEY_DEFAULTS[1]);
+  //   addColorRow(bronzeSection, '深色', 2, true, SLAB_BRONZE_KEY_DEFAULTS[2]);
+  //   const bronzeReset = createButton('預設');
+  //   bronzeReset.class('awe-fill-reset');
+  //   bronzeReset.parent(bronzeSection);
+  //   bronzeReset.elt.addEventListener('click', function () {
+  //     for (var i = 0; i < SLAB_BRONZE_KEY_DEFAULTS.length; i++) {
+  //       for (var k = 0; k < SLAB_BRONZE_KEY_INDICES[i].length; k++) {
+  //         var idx = SLAB_BRONZE_KEY_INDICES[i][k];
+  //         slabGradientStopsBronzeLive[idx].color = SLAB_BRONZE_KEY_DEFAULTS[i];
+  //       }
+  //     }
+  //     refreshSlabIconsForLevelRange(33, 33);
+  //     var rows = bronzeSection.elt.querySelectorAll('.awe-fill-row');
+  //     for (var i = 0; i < 3 && i < rows.length; i++) {
+  //       var colorInp = rows[i].querySelector('.awe-fill-color');
+  //       var hexInp = rows[i].querySelector('.awe-fill-hex');
+  //       if (colorInp) colorInp.value = SLAB_BRONZE_KEY_DEFAULTS[i];
+  //       if (hexInp) hexInp.value = SLAB_BRONZE_KEY_DEFAULTS[i];
+  //     }
+  //   });
+
+  //   const goldSection = createDiv('');
+  //   goldSection.class('awe-fill-section');
+  //   goldSection.parent(wrap);
+  //   const goldTitle = createSpan('Gold (awe21-30)');
+  //   goldTitle.class('awe-fill-section-title');
+  //   goldTitle.parent(goldSection);
+  //   addColorRow(goldSection, '主色', 0, false, SLAB_GOLD_KEY_DEFAULTS[0]);
+  //   addColorRow(goldSection, '白', 1, false, SLAB_GOLD_KEY_DEFAULTS[1]);
+  //   addColorRow(goldSection, '深色', 2, false, SLAB_GOLD_KEY_DEFAULTS[2]);
+  //   const goldReset = createButton('預設');
+  //   goldReset.class('awe-fill-reset');
+  //   goldReset.parent(goldSection);
+  //   goldReset.elt.addEventListener('click', function () {
+  //     for (var i = 0; i < SLAB_GOLD_KEY_DEFAULTS.length; i++) {
+  //       for (var k = 0; k < SLAB_GOLD_KEY_INDICES[i].length; k++) {
+  //         var idx = SLAB_GOLD_KEY_INDICES[i][k];
+  //         slabGradientStopsGoldLive[idx].color = SLAB_GOLD_KEY_DEFAULTS[i];
+  //       }
+  //     }
+  //     refreshSlabIconsForLevelRange(43, 43);
+  //     var rows = goldSection.elt.querySelectorAll('.awe-fill-row');
+  //     for (var i = 0; i < 3 && i < rows.length; i++) {
+  //       var colorInp = rows[i].querySelector('.awe-fill-color');
+  //       var hexInp = rows[i].querySelector('.awe-fill-hex');
+  //       if (colorInp) colorInp.value = SLAB_GOLD_KEY_DEFAULTS[i];
+  //       if (hexInp) hexInp.value = SLAB_GOLD_KEY_DEFAULTS[i];
+  //     }
+  //   });
+  // })();
 
   const btn = createButton('🔇');
   btn.class('sound-toggle-btn');
-  btn.parent(soundBarDiv);
+  btn.parent(soundAndTimeWrap);
   btn.elt.addEventListener('click', function () {
     if (soundEnabled) {
       soundEnabled = false;
@@ -1370,6 +1582,14 @@ function setup() {
       enableSound();
     }
   });
+
+  timeDisplayEl = createSpan('');
+  timeDisplayEl.class('game-time-display');
+  timeDisplayEl.parent(soundAndTimeWrap);
+
+  winConditionHintEl = createDiv('');
+  winConditionHintEl.class('win-condition-hint-overlay');
+  winConditionHintEl.parent(document.body);
 
   // 邊框參數 UI（weave 風格，可即時調整 #game-container 邊框）- 已關閉
   // (function () {
@@ -1531,30 +1751,24 @@ function computeLayout() {
 
   // 最下面：已交換區（顯示實際發生過的交換）—— 已註解
   // const historyZoneH = Math.min(height * 0.14, 80);
-  const conveyorGap = 8;
-  const conveyorH = Math.min(height * 0.1, 56);
-  // swapHistoryZone = {
+  // 輸送帶 UI 暫時用不到，先 comment 掉
+  // const conveyorGap = 8;
+  // const conveyorH = Math.min(height * 0.1, 56);
+  // // swapHistoryZone = { ... };
+  // // 輸送帶：在已交換區上方，顯示接下來的關卡組
+  // const conveyorLabelW = 52;
+  // const conveyorSegmentCount = 7;
+  // conveyorZone = {
   //   x: margin,
-  //   y: height - historyZoneH - margin,
+  //   y: height - conveyorH - margin - conveyorGap,
   //   w: width - 2 * margin,
-  //   h: historyZoneH,
-  //   pad: 8,
-  //   lineHeight: 18
+  //   h: conveyorH,
+  //   pad: 10,
+  //   labelWidth: conveyorLabelW,
+  //   segmentCount: conveyorSegmentCount,
+  //   gap: 8
   // };
-  // 輸送帶：在已交換區上方，顯示接下來的關卡組（含 JKL, MNO, PQR, STU, VWX）
-  const conveyorLabelW = 52;
-  const conveyorSegmentCount = 7;  // 一次顯示接下來 7 關
-  conveyorZone = {
-    x: margin,
-    y: height - conveyorH - margin - conveyorGap,  // 已交換區註解後，輸送帶貼底
-    w: width - 2 * margin,
-    h: conveyorH,
-    pad: 10,
-    labelWidth: conveyorLabelW,
-    segmentCount: conveyorSegmentCount,
-    gap: 8
-  };
-  conveyorZone.segmentW = (conveyorZone.w - 2 * conveyorZone.pad - conveyorZone.labelWidth - (conveyorZone.segmentCount - 1) * conveyorZone.gap) / conveyorZone.segmentCount;
+  // conveyorZone.segmentW = (conveyorZone.w - 2 * conveyorZone.pad - conveyorZone.labelWidth - (conveyorZone.segmentCount - 1) * conveyorZone.gap) / conveyorZone.segmentCount;
 }
 
 function getSwapZoneSlotCenter(slotIndex) {
@@ -1687,12 +1901,12 @@ function drawThemeBackground() {
     fill(THEME_BG[0], THEME_BG[1], THEME_BG[2], THEME_BG_OVERLAY_ALPHA);
     rect(0, 0, width, height);
   } else {
-    const ctx = drawingContext;
-    const g = ctx.createLinearGradient(0, 0, 0, height);
-    g.addColorStop(0, 'rgb(' + THEME_BG[0] + ',' + THEME_BG[1] + ',' + THEME_BG[2] + ')');
-    g.addColorStop(1, 'rgb(' + THEME_BG_BOTTOM[0] + ',' + THEME_BG_BOTTOM[1] + ',' + THEME_BG_BOTTOM[2] + ')');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, width, height);
+  const ctx = drawingContext;
+  const g = ctx.createLinearGradient(0, 0, 0, height);
+  g.addColorStop(0, 'rgb(' + THEME_BG[0] + ',' + THEME_BG[1] + ',' + THEME_BG[2] + ')');
+  g.addColorStop(1, 'rgb(' + THEME_BG_BOTTOM[0] + ',' + THEME_BG_BOTTOM[1] + ',' + THEME_BG_BOTTOM[2] + ')');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, width, height);
   }
 }
 
@@ -1752,7 +1966,7 @@ function draw() {
   drawShelves();
   drawShelfSeparators();
   // drawSwapZone();  // 右上角交換區已註解
-  drawConveyorBelt();
+  // drawConveyorBelt();  // 輸送帶 UI 暫時用不到，先 comment 掉
   // drawSwapHistoryZone();  // 已交換區已註解
   // 拖動時畫出可放置的格子範圍（方便除錯）
   if (DEBUG && draggedItem !== null) {
@@ -2112,7 +2326,7 @@ function drawItems() {
       if (dropAnimation && dropAnimation.srcCell === c && dropAnimation.srcSlot === s) continue;
       const item = cells[c][s];
       const isHighlight = hoverTargetItem && hoverTargetItem.cellIndex === c && hoverTargetItem.slotIndex === s;
-      drawOneItem(item.displayX, item.displayY, item.typeIndex, false, isHighlight);
+      drawOneItem(item.displayX, item.displayY, item.typeIndex, false, isHighlight, c);
     }
   }
 }
@@ -2429,7 +2643,7 @@ function finishDropAnimation() {
   dropAnimation = null;
 }
 
-function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
+function drawOneItem(x, y, typeIndex, isDragging, isHighlight, cellIndex) {
   if (isHighlight === undefined) isHighlight = false;
   if (typeIndex < 0 || typeIndex >= ITEM_TYPES.length) return;
   const t = ITEM_TYPES[typeIndex];
@@ -2454,7 +2668,13 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
     const g = Math.round(255 * (1 - AVATAR_54_98_BG_GRAY / 100));
     fill(g, g, g);
   } else {
-    fill(t.color[0], t.color[1], t.color[2]);
+    // awe1-30 櫃0 可套用背景填色明度／飽和度（僅櫃0顯示動態變化）
+    const bgColor = getSlabCardBgColor(typeIndex, cellIndex);
+    if (bgColor) {
+      fill(bgColor[0], bgColor[1], bgColor[2]);
+    } else {
+  fill(t.color[0], t.color[1], t.color[2]);
+    }
   }
   if (isHighlight) {
     stroke(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2]);
@@ -2491,25 +2711,63 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
 }
 
 function drawTimer() {
-  if (gameState !== 'playing' && gameState !== 'completed') return;
+  if (!timeDisplayEl) return;
+  if (gameState !== 'playing' && gameState !== 'completed') {
+    timeDisplayEl.elt.textContent = '';
+    return;
+  }
   const elapsed = (startTime == null)
     ? 0
     : (gameState === 'completed' ? (endTime - startTime) / 1000 : (millis() - startTime) / 1000);
-  fill(THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]);
-  noStroke();
-  textAlign(LEFT, TOP);
-  textSize(Math.min(28, width * 0.06));
-  text('時間: ' + elapsed.toFixed(1) + ' 秒', 20, 18);
+  timeDisplayEl.elt.textContent = 'LOVE: ' + elapsed.toFixed(1) + ' 秒';
 }
 
 function drawWinConditionHint() {
+  if (gameState !== 'idle' && gameState !== 'playing') {
+    if (winConditionHintEl) winConditionHintEl.elt.style.display = 'none';
+    winConditionHintShownAt = null;
+    winConditionHintFadeStart = null;
+    winConditionHintLastText = null;
+    return;
+  }
+  if (!winConditionHintEl) {
+    winConditionHintEl = createDiv('');
+    winConditionHintEl.class('win-condition-hint-overlay');
+    winConditionHintEl.parent(document.body);
+  }
+  if (winConditionHintShownAt == null) winConditionHintShownAt = millis();
   const levelIndices = getLevelTypeIndices(currentLevel);
   const names = levelIndices.map(function (i) { return ITEM_TYPES[i].name; }).join('、');
-  fill(THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]);
-  noStroke();
-  textAlign(LEFT, TOP);
-  textSize(Math.min(14, width * 0.03));
-  text('過關：9 櫃（3×3）每櫃 3 格需「全部同一種」（' + names + '）', 20, 52);
+  const hintText = '過關：9 櫃（3×3）每櫃 3 格需「全部同一種」（' + names + '）';
+
+  // 僅在文字變更時更新 textContent，避免每幀 repaint
+  if (winConditionHintLastText !== hintText) {
+    winConditionHintEl.elt.textContent = hintText;
+    winConditionHintLastText = hintText;
+  }
+  if (winConditionHintEl.elt.style.display !== 'block') {
+    winConditionHintEl.elt.style.display = 'block';
+  }
+
+  const elapsed = millis() - winConditionHintShownAt;
+  if (elapsed >= WIN_HINT_DISPLAY_MS) {
+    if (winConditionHintFadeStart == null) winConditionHintFadeStart = millis();
+    const fadeElapsed = millis() - winConditionHintFadeStart;
+    if (fadeElapsed >= WIN_HINT_FADE_MS) {
+      winConditionHintEl.elt.remove();
+      winConditionHintEl = null;
+      winConditionHintShownAt = null;
+      winConditionHintFadeStart = null;
+      winConditionHintLastText = null;
+      return;
+    }
+    winConditionHintEl.elt.style.opacity = Math.max(0, 1 - fadeElapsed / WIN_HINT_FADE_MS);
+  } else {
+    // 非淡出階段只設一次 opacity，不每幀改
+    if (winConditionHintEl.elt.style.opacity !== '1') {
+      winConditionHintEl.elt.style.opacity = '1';
+    }
+  }
 }
 
 // 在畫面上直接顯示每櫃完成狀態，方便看出「為什麼還沒過關」—— 已註解
