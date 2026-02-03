@@ -245,6 +245,34 @@ let replayBtn;       // 再玩一次按鈕區域 { x, y, w, h }
 let audioCtx = null; // Web Audio 用於拖放音效（首次使用者操作時建立並 resume）
 let soundEnabled = false; // 使用者點「開啟音效」後才播放
 let soundBarDiv = null;   // 正上方音效按鈕列
+// 拖曳滑過卡片音效參數（可被 UI 動態調整）
+let dragHoverSoundParams = {
+  f0: 255,      // 低音 Hz
+  f1: 370,      // 主音 Hz
+  f2: 480,      // 高音 Hz
+  vol: 0.085,   // 音量 0~0.2（8.5%）
+  dur: 0.07,    // 時長 秒
+  attack: 0.012, // 起音 秒
+  delay2: 0.012, // 高音延遲 秒
+  vol0Ratio: 0.65,
+  vol2Ratio: 0.4,
+  dur2Ratio: 0.88
+};
+let dragHoverPreviewInterval = null; // BPM 預覽用 setInterval id
+let backgroundMusicInterval = null;  // 遊戲中「背景音樂」55 BPM 用
+let backgroundMusicStartedEver = false; // 整場遊戲只要 drag 過第一次就持續播放，不因換關停止
+let backgroundMusicF2ThisLevel = 430;  // 本關背景音樂高音（430~650 隨機，每關 initLevel 時重設）
+const DRAG_HOVER_PREVIEW_BPM = 55;   // 預覽節拍（55 BPM）
+const DRAG_HOVER_PRESETS = {
+  '預設': {
+    f0: 255, f1: 370, f2: 480, vol: 0.068, dur: 0.07, attack: 0.012
+  },
+  '背景音樂': {
+    f0: 385, f1: 430, f2: 630, vol: 0.085, dur: 0.06, attack: 0.016
+  }
+};
+// 背景音樂預設值（用於 UI「預設」還原）
+const BACKGROUND_MUSIC_DEFAULT = { f0: 385, f1: 430, f2: 630, vol: 0.085, dur: 0.06, attack: 0.016 };
 const AVATAR_54_98_BG_GRAY = 23; // 54～98 關卡片底色固定 23% 灰階（0%=白、100%=全黑）
 
 // 書櫃佈局：9 櫃排成 3×3，每櫃寬 cellW、高 cellH
@@ -671,39 +699,49 @@ function playDropCancelSound() {
 }
 
 // 拖曳時滑過其他卡片（思考是否要 drop）— 可愛療癒、略帶「選過」的輕柔音效
-function playDragHoverSound() {
-  if (!soundEnabled) return;
+// forcePlay: 預覽模式時可無視 soundEnabled 強制播放
+// presetName: 可選，例如 '背景音樂'，則該次播放使用該預設參數（不改動 dragHoverSoundParams）
+// overrides: 可選，該次覆寫參數，例如 { f0: 350, f2: 600 }（用於隨機低音/高音）
+function playDragHoverSound(forcePlay, presetName, overrides) {
+  if (!soundEnabled && !forcePlay) return;
   try {
     const ctx = getAudioContext();
-    const f0 = pitchFreq(255);   // 低頻基音，稍微低一點
-    const f1 = pitchFreq(370);   // 主音（溫暖中音）
-    const f2 = pitchFreq(480);   // 高一點的和音
+    let p = presetName && DRAG_HOVER_PRESETS[presetName]
+      ? Object.assign({}, dragHoverSoundParams, DRAG_HOVER_PRESETS[presetName])
+      : dragHoverSoundParams;
+    if (overrides && (overrides.f0 !== undefined || overrides.f2 !== undefined)) {
+      p = Object.assign({}, p, overrides);
+    }
+    const f0 = pitchFreq(p.f0);
+    const f1 = pitchFreq(p.f1);
+    const f2 = pitchFreq(p.f2);
+    const dur = Math.max(0.02, p.dur);
+    const vol = Math.max(0.01, Math.min(0.2, p.vol));
+    const attack = Math.max(0.002, Math.min(dur * 0.5, p.attack));
+    const delay2 = Math.max(0, Math.min(0.05, p.delay2));
     function playNow() {
       const t0 = ctx.currentTime;
-      const dur = 0.07;
-      const vol = 0.068;
-      const attack = 0.012;   // 稍長起音，更圓潤
       const osc0 = ctx.createOscillator();
       const osc1 = ctx.createOscillator();
       const osc2 = ctx.createOscillator();
       const gain0 = ctx.createGain();
       const gain1 = ctx.createGain();
       const gain2 = ctx.createGain();
-      osc0.type = 'triangle';  // 三角形波較圓潤
-      osc1.type = 'triangle';  // 主音也用 triangle，更圓潤
+      osc0.type = 'triangle';
+      osc1.type = 'triangle';
       osc2.type = 'sine';
       osc0.frequency.value = f0;
       osc1.frequency.value = f1;
       osc2.frequency.value = f2;
       gain0.gain.setValueAtTime(0.001, t0);
-      gain0.gain.linearRampToValueAtTime(vol * 0.65, t0 + attack);
+      gain0.gain.linearRampToValueAtTime(vol * p.vol0Ratio, t0 + attack);
       gain0.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
       gain1.gain.setValueAtTime(0.001, t0);
       gain1.gain.linearRampToValueAtTime(vol, t0 + attack);
       gain1.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-      gain2.gain.setValueAtTime(0.001, t0 + 0.012);
-      gain2.gain.linearRampToValueAtTime(vol * 0.4, t0 + 0.012 + attack);
-      gain2.gain.exponentialRampToValueAtTime(0.001, t0 + dur * 0.88);
+      gain2.gain.setValueAtTime(0.001, t0 + delay2);
+      gain2.gain.linearRampToValueAtTime(vol * p.vol2Ratio, t0 + delay2 + attack);
+      gain2.gain.exponentialRampToValueAtTime(0.001, t0 + dur * p.dur2Ratio);
       osc0.connect(gain0);
       gain0.connect(ctx.destination);
       osc1.connect(gain1);
@@ -712,7 +750,7 @@ function playDragHoverSound() {
       gain2.connect(ctx.destination);
       osc0.start(t0);
       osc1.start(t0);
-      osc2.start(t0 + 0.012);
+      osc2.start(t0 + delay2);
       osc0.stop(t0 + dur);
       osc1.stop(t0 + dur);
       osc2.stop(t0 + dur);
@@ -1037,6 +1075,89 @@ function setup() {
   soundBarDiv.class('sound-bar');
   soundBarDiv.parent(soundAndCanvas);
 
+  // 背景音樂參數 UI（在音效按鈕左側，可動態調整）
+  (function () {
+    const wrap = createDiv('');
+    wrap.class('drag-hover-params-wrap');
+    wrap.parent(soundBarDiv);
+    const bgPreset = DRAG_HOVER_PRESETS['背景音樂'];
+
+    const paramRows = [];
+    function addSlider(label, key, min, max, step, format) {
+      const row = createDiv('');
+      row.class('drag-hover-param-row');
+      row.parent(wrap);
+      const labelSpan = createSpan(label);
+      labelSpan.parent(row);
+      const slider = createSlider(min, max, bgPreset[key], step);
+      slider.class('drag-hover-slider');
+      slider.parent(row);
+      const valueSpan = createSpan(format(bgPreset[key]));
+      valueSpan.class('drag-hover-value');
+      valueSpan.parent(row);
+      function update() {
+        const v = parseFloat(slider.value());
+        bgPreset[key] = v;
+        valueSpan.elt.textContent = format(v);
+      }
+      slider.elt.addEventListener('input', update);
+      paramRows.push({ key, slider, valueSpan, format });
+      return { slider, valueSpan, update };
+    }
+    addSlider('低音', 'f0', 150, 450, 5, function (v) { return Math.round(v) + ' Hz'; });
+    addSlider('主音', 'f1', 250, 650, 5, function (v) { return Math.round(v) + ' Hz'; });
+    addSlider('高音', 'f2', 350, 850, 5, function (v) { return Math.round(v) + ' Hz'; });
+    addSlider('音量', 'vol', 0.01, 0.2, 0.005, function (v) { return (v * 100).toFixed(1) + '%'; });
+    addSlider('時長', 'dur', 0.03, 0.15, 0.005, function (v) { return v.toFixed(2) + 's'; });
+    addSlider('起音', 'attack', 0.002, 0.03, 0.001, function (v) { return v.toFixed(3) + 's'; });
+
+    // 預設選單：「預設」還原背景音樂預設值，「背景音樂」同步顯示目前值
+    const presetRow = createDiv('');
+    presetRow.class('drag-hover-param-row drag-hover-preset-row');
+    presetRow.parent(wrap);
+    const presetLabel = createSpan('預設');
+    presetLabel.parent(presetRow);
+    const presetSelect = createSelect();
+    presetSelect.parent(presetRow);
+    presetSelect.option('預設');
+    presetSelect.option('背景音樂');
+    presetSelect.class('drag-hover-preset-select');
+    presetSelect.elt.addEventListener('change', function () {
+      const isReset = presetSelect.value() === '預設';
+      const source = isReset ? BACKGROUND_MUSIC_DEFAULT : bgPreset;
+      for (let i = 0; i < paramRows.length; i++) {
+        const pr = paramRows[i];
+        const v = source[pr.key];
+        if (v !== undefined) {
+          bgPreset[pr.key] = v;
+          pr.slider.value(v);
+          pr.valueSpan.elt.textContent = pr.format(v);
+        }
+      }
+    });
+
+    const previewRow = createDiv('');
+    previewRow.class('drag-hover-param-row drag-hover-preview-row');
+    previewRow.parent(wrap);
+    const checkbox = createCheckbox(DRAG_HOVER_PREVIEW_BPM + ' BPM 預覽', false);
+    checkbox.class('drag-hover-preview-checkbox');
+    checkbox.parent(previewRow);
+    checkbox.elt.addEventListener('change', function () {
+      if (checkbox.checked()) {
+        if (dragHoverPreviewInterval != null) clearInterval(dragHoverPreviewInterval);
+        const msPerBeat = Math.round(60000 / DRAG_HOVER_PREVIEW_BPM);
+        dragHoverPreviewInterval = setInterval(function () {
+          playDragHoverSound(true, '背景音樂', { f0: 300 + Math.random() * (450 - 300), f2: backgroundMusicF2ThisLevel });
+        }, msPerBeat);
+      } else {
+        if (dragHoverPreviewInterval != null) {
+          clearInterval(dragHoverPreviewInterval);
+          dragHoverPreviewInterval = null;
+        }
+      }
+    });
+  })();
+
   const btn = createButton('🔇');
   btn.class('sound-toggle-btn');
   btn.parent(soundBarDiv);
@@ -1253,6 +1374,11 @@ function initLevel(level) {
   swapHistory = [];
   historyStep = 0;
   prevHoverTargetItem = null;
+  // 每關開始：計時歸零，等本關第一次 drag 才開始計時；背景音樂不停止，整場持續
+  startTime = null;
+  endTime = null;
+  // 本關背景音樂高音：430~650 隨機一個參數，每關不同
+  backgroundMusicF2ThisLevel = 430 + Math.random() * (650 - 430);
 
   const levelIndices = getLevelTypeIndices(level);
   const allItems = [];
@@ -1279,6 +1405,7 @@ function initGame() {
   startTime = null;
   endTime = null;
   currentLevel = 0;  // 新局從第一關 ABC 開始
+  backgroundMusicStartedEver = false; // 新局時重置，第一次 drag 再開始背景音樂
   initLevel(currentLevel);
   setReplayButtonRect();
 }
@@ -1416,7 +1543,7 @@ function draw() {
     // 亮起來變化時記錄：從無→有 或 從 A→B，並播放「滑過此格」的輕柔選取音效
     if (hoverTargetItem && (!prevHoverTargetItem || prevHoverTargetItem.cellIndex !== hoverTargetItem.cellIndex || prevHoverTargetItem.slotIndex !== hoverTargetItem.slotIndex)) {
       pushHighlightLog(hoverTargetItem.cellIndex, hoverTargetItem.slotIndex, '拖曳滑過此格 (pointer 在物品上)');
-      playDragHoverSound();
+      playDragHoverSound(undefined, '背景音樂', { f2: 480 + Math.random() * (850 - 480) });
     }
     prevHoverTargetItem = hoverTargetItem;
   } else {
@@ -1456,8 +1583,7 @@ function draw() {
       const overlayEl = document.getElementById('celebration-overlay');
       if (overlayEl) overlayEl.classList.remove('visible');
       currentLevel++;
-      initLevel(currentLevel);
-      startTime = millis();
+      initLevel(currentLevel);  // 計時已在 initLevel 歸零，本關第一次 drag 才開始
       levelCompleteCelebration = null;
       console.log('[draw] 恭喜特效結束，進入第 ' + (currentLevel + 1) + ' 關 ' + LEVEL_GROUPS[currentLevel]);
     }
@@ -2167,9 +2293,9 @@ function drawOneItem(x, y, typeIndex, isDragging, isHighlight) {
 
 function drawTimer() {
   if (gameState !== 'playing' && gameState !== 'completed') return;
-  const elapsed = gameState === 'completed'
-    ? (endTime - startTime) / 1000
-    : (millis() - startTime) / 1000;
+  const elapsed = (startTime == null)
+    ? 0
+    : (gameState === 'completed' ? (endTime - startTime) / 1000 : (millis() - startTime) / 1000);
   fill(THEME_TEXT_DARK[0], THEME_TEXT_DARK[1], THEME_TEXT_DARK[2]);
   noStroke();
   textAlign(LEFT, TOP);
@@ -2221,7 +2347,7 @@ function drawResultOverlay() {
   textSize(Math.min(36, width * 0.08));
   text('過關！', width / 2, height * 0.42);
   textSize(Math.min(28, width * 0.06));
-  const sec = ((endTime - startTime) / 1000).toFixed(1);
+  const sec = (startTime != null && endTime != null) ? ((endTime - startTime) / 1000).toFixed(1) : '0.0';
   text('耗時 ' + sec + ' 秒', width / 2, height * 0.5);
 
   fill(THEME_ACCENT[0], THEME_ACCENT[1], THEME_ACCENT[2]);
@@ -2369,19 +2495,17 @@ function pointerPressed(px, py) {
     const targetLevel = currentLevel + 1 + conveyorSeg;
     if (targetLevel >= 0 && targetLevel < NUM_LEVELS) {
       currentLevel = targetLevel;
-      initLevel(currentLevel);
+      initLevel(currentLevel);  // 計時已歸零，本關第一次 drag 才開始
       gameState = 'playing';
-      if (startTime == null) startTime = millis();
       if (DEBUG) console.log('[pointerPressed] 切換到第 ' + (currentLevel + 1) + ' 關 ' + LEVEL_GROUPS[currentLevel]);
     }
     return;
   }
   const hit = hitTestItem(px, py);
   if (hit) {
-    if (gameState === 'idle') {
-      gameState = 'playing';
-      startTime = millis();
-    }
+    if (gameState === 'idle') gameState = 'playing';
+    // 本關第一次 drag 才開始計時
+    if (startTime == null) startTime = millis();
     draggedItem = {
       cellIndex: hit.cellIndex,
       slotIndex: hit.slotIndex,
@@ -2391,7 +2515,18 @@ function pointerPressed(px, py) {
     };
     dragX = px - draggedItem.offsetX;
     dragY = py - draggedItem.offsetY;
+    // 第一次拖曳卡片時，若尚未開啟音效，自動開啟並更新按鈕為 🔊（整場保持開啟，不因換關切換）
+    if (!soundEnabled) enableSound();
     playDragStartSound();
+    // 整場遊戲第一次 drag 時開始「背景音樂」，之後不因換關停止，一直播放
+    if (!backgroundMusicStartedEver) {
+      backgroundMusicStartedEver = true;
+      if (backgroundMusicInterval != null) clearInterval(backgroundMusicInterval);
+      const msPerBeat = Math.round(60000 / DRAG_HOVER_PREVIEW_BPM);
+      backgroundMusicInterval = setInterval(function () {
+        playDragHoverSound(true, '背景音樂', { f0: 300 + Math.random() * (450 - 300), f2: backgroundMusicF2ThisLevel });
+      }, msPerBeat);
+    }
     if (DEBUG) console.log('[pointerPressed] drag started cell=' + hit.cellIndex + ' slot=' + hit.slotIndex);
   }
 }
@@ -2476,8 +2611,7 @@ function checkWin() {
       if (Number(list[s].typeIndex) !== t) return;
     }
   }
-  if (startTime == null) startTime = millis();
-  const elapsed = (millis() - startTime) / 1000;
+  const elapsed = (startTime != null) ? (millis() - startTime) / 1000 : 0;
   playLevelCompleteSound();
   if (currentLevel < NUM_LEVELS - 1) {
     // 還有下一關：先播恭喜彩帶特效，結束後再切下一關
