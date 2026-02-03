@@ -247,10 +247,9 @@ let soundEnabled = false; // 使用者點「開啟音效」後才播放
 let soundBarDiv = null;   // 正上方音效按鈕列
 let timeDisplayEl = null; // 時間顯示（在聲音按鈕下方）
 let winConditionHintEl = null; // 過關提示 overlay（正上方）
-let winConditionHintShownAt = null; // 首次顯示時間（1 分鐘後淡出）
-let winConditionHintFadeStart = null; // 淡出開始時間
 let winConditionHintLastText = null;  // 上次設定的文字，避免每幀改 DOM 造成 repaint
-const WIN_HINT_DISPLAY_MS = 60000;   // 顯示 1 分鐘
+let winConditionHintDismissed = false; // 使用者拖過卡片後即永久不再顯示（直到重新整理）
+let winConditionHintFadeStart = null; // 淡出開始時間
 const WIN_HINT_FADE_MS = 2000;       // 淡出歷時 2 秒
 // 拖曳滑過卡片音效參數（可被 UI 動態調整）
 let dragHoverSoundParams = {
@@ -269,6 +268,9 @@ let dragHoverPreviewInterval = null; // BPM 預覽用 setInterval id
 let backgroundMusicInterval = null;  // 遊戲中「背景音樂」55 BPM 用
 let backgroundMusicStartedEver = false; // 整場遊戲只要 drag 過第一次就持續播放，不因換關停止
 let backgroundMusicF2ThisLevel = 430;  // 本關背景音樂高音（430~650 隨機，每關 initLevel 時重設）
+// 水滴流水聲（測試用）：可獨立開關，平靜穩定的溪流／倒水聲
+let waterStreamEnabled = false;
+let waterStreamNodes = null;  // { source, gain, filter, lfoGain } 用於 stop 時 disconnect
 const DRAG_HOVER_PREVIEW_BPM = 55;   // 預覽節拍（55 BPM）
 const DRAG_HOVER_PRESETS = {
   '預設': {
@@ -1060,6 +1062,73 @@ function playFirecrackerSound() {
   }
 }
 
+// --- 水滴流水聲（平靜、細流，像沖咖啡倒水／溪流）---
+function stopWaterStreamSound() {
+  if (!waterStreamNodes) return;
+  try {
+    if (waterStreamNodes.lfo && waterStreamNodes.lfo.stop) waterStreamNodes.lfo.stop();
+    if (waterStreamNodes.source && waterStreamNodes.source.stop) waterStreamNodes.source.stop();
+    if (waterStreamNodes.source && waterStreamNodes.source.disconnect) waterStreamNodes.source.disconnect();
+    if (waterStreamNodes.gain && waterStreamNodes.gain.disconnect) waterStreamNodes.gain.disconnect();
+    if (waterStreamNodes.filter && waterStreamNodes.filter.disconnect) waterStreamNodes.filter.disconnect();
+    if (waterStreamNodes.lfoGain && waterStreamNodes.lfoGain.disconnect) waterStreamNodes.lfoGain.disconnect();
+  } catch (e) { /* ignore */ }
+  waterStreamNodes = null;
+}
+
+function startWaterStreamSound() {
+  if (waterStreamNodes) return;
+  try {
+    const ctx = getAudioContext();
+    function playNow() {
+      if (waterStreamNodes) return; // 若已關閉則不啟動
+      const sampleRate = ctx.sampleRate;
+      const durationSec = 2.5;
+      const frameCount = Math.round(sampleRate * durationSec);
+      const buffer = ctx.createBuffer(1, frameCount, sampleRate);
+      const data = buffer.getChannelData(0);
+      // 近似粉紅噪音（1/f）
+      let b0 = 0, b1 = 0, b2 = 0;
+      for (let i = 0; i < frameCount; i++) {
+        const white = (Math.random() * 2 - 1);
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.96900 * b2 + white * 0.1538520;
+        data[i] = (b0 + b1 + b2) * 0.2;
+      }
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 900;
+      filter.Q.value = 1.2;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.12, ctx.currentTime); // 提高音量以便聽得到
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 0.25;
+      lfo.type = 'sine';
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.setValueAtTime(0.02, ctx.currentTime);
+      lfo.connect(lfoGain);
+      lfoGain.connect(gain.gain);
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      lfo.start(ctx.currentTime);
+      source.start(ctx.currentTime);
+      waterStreamNodes = { source, gain, filter, lfoGain, lfo };
+    }
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(playNow).catch(function () { playNow(); });
+    } else {
+      playNow();
+    }
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.warn) console.warn('startWaterStreamSound:', e);
+  }
+}
+
 // --- Debug ---
 let DEBUG = true;     // 按 D 鍵切換
 let lastReleaseLog = null;  // { targetCell, placed, px, py, cellCounts }
@@ -1305,6 +1374,27 @@ function setup() {
   const soundAndTimeWrap = createDiv('');
   soundAndTimeWrap.class('sound-and-time-wrap');
   soundAndTimeWrap.parent(soundBarDiv);
+
+  // 水滴流水聲開關（在「開啟聲音」按鈕左邊，供測試）
+  const soundBtnRow = createDiv('');
+  soundBtnRow.class('sound-btn-row');
+  soundBtnRow.parent(soundAndTimeWrap);
+
+  const waterStreamWrap = createDiv('');
+  waterStreamWrap.class('water-stream-wrap');
+  waterStreamWrap.parent(soundBtnRow);
+
+  const waterStreamCheck = createCheckbox('水滴流水', false);
+  waterStreamCheck.class('water-stream-checkbox');
+  waterStreamCheck.parent(waterStreamWrap);
+  waterStreamCheck.elt.addEventListener('change', function () {
+    waterStreamEnabled = waterStreamCheck.checked();
+    if (waterStreamEnabled) {
+      startWaterStreamSound();
+    } else {
+      stopWaterStreamSound();
+    }
+  });
 
   // 背景音樂 UI 暫時用不到，先 comment 掉
   // (function () {
@@ -1571,7 +1661,7 @@ function setup() {
 
   const btn = createButton('🔇');
   btn.class('sound-toggle-btn');
-  btn.parent(soundAndTimeWrap);
+  btn.parent(soundBtnRow);
   btn.elt.addEventListener('click', function () {
     if (soundEnabled) {
       soundEnabled = false;
@@ -1751,24 +1841,22 @@ function computeLayout() {
 
   // 最下面：已交換區（顯示實際發生過的交換）—— 已註解
   // const historyZoneH = Math.min(height * 0.14, 80);
-  // 輸送帶 UI 暫時用不到，先 comment 掉
-  // const conveyorGap = 8;
-  // const conveyorH = Math.min(height * 0.1, 56);
-  // // swapHistoryZone = { ... };
-  // // 輸送帶：在已交換區上方，顯示接下來的關卡組
-  // const conveyorLabelW = 52;
-  // const conveyorSegmentCount = 7;
-  // conveyorZone = {
-  //   x: margin,
-  //   y: height - conveyorH - margin - conveyorGap,
-  //   w: width - 2 * margin,
-  //   h: conveyorH,
-  //   pad: 10,
-  //   labelWidth: conveyorLabelW,
-  //   segmentCount: conveyorSegmentCount,
-  //   gap: 8
-  // };
-  // conveyorZone.segmentW = (conveyorZone.w - 2 * conveyorZone.pad - conveyorZone.labelWidth - (conveyorZone.segmentCount - 1) * conveyorZone.gap) / conveyorZone.segmentCount;
+  // 輸送帶：在已交換區上方，顯示接下來的關卡組
+  const conveyorGap = 8;
+  const conveyorH = Math.min(height * 0.1, 56);
+  const conveyorLabelW = 52;
+  const conveyorSegmentCount = 7;
+  conveyorZone = {
+    x: margin,
+    y: height - conveyorH - margin - conveyorGap,
+    w: width - 2 * margin,
+    h: conveyorH,
+    pad: 10,
+    labelWidth: conveyorLabelW,
+    segmentCount: conveyorSegmentCount,
+    gap: 8
+  };
+  conveyorZone.segmentW = (conveyorZone.w - 2 * conveyorZone.pad - conveyorZone.labelWidth - (conveyorZone.segmentCount - 1) * conveyorZone.gap) / conveyorZone.segmentCount;
 }
 
 function getSwapZoneSlotCenter(slotIndex) {
@@ -1966,7 +2054,7 @@ function draw() {
   drawShelves();
   drawShelfSeparators();
   // drawSwapZone();  // 右上角交換區已註解
-  // drawConveyorBelt();  // 輸送帶 UI 暫時用不到，先 comment 掉
+  drawConveyorBelt();
   // drawSwapHistoryZone();  // 已交換區已註解
   // 拖動時畫出可放置的格子範圍（方便除錯）
   if (DEBUG && draggedItem !== null) {
@@ -2723,24 +2811,41 @@ function drawTimer() {
 }
 
 function drawWinConditionHint() {
+  // 一旦使用者拖過卡片並淡出移除後，不再顯示（除非重新整理）
+  if (winConditionHintDismissed) return;
+
+  // 不管在哪一關，只要使用者拖曳任一張卡片 → 淡出後移除，並標記永久不再顯示
+  if (winConditionHintEl && draggedItem !== null) {
+    if (winConditionHintFadeStart == null) winConditionHintFadeStart = millis();
+    const fadeElapsed = millis() - winConditionHintFadeStart;
+    if (fadeElapsed >= WIN_HINT_FADE_MS) {
+      winConditionHintEl.elt.remove();
+      winConditionHintEl = null;
+      winConditionHintDismissed = true;
+      winConditionHintFadeStart = null;
+      winConditionHintLastText = null;
+      return;
+    }
+    winConditionHintEl.elt.style.opacity = Math.max(0, 1 - fadeElapsed / WIN_HINT_FADE_MS);
+    return;
+  }
+
+  // 非 idle/playing 時隱藏（尚未拖過卡片前仍可能再顯示）
   if (gameState !== 'idle' && gameState !== 'playing') {
     if (winConditionHintEl) winConditionHintEl.elt.style.display = 'none';
-    winConditionHintShownAt = null;
-    winConditionHintFadeStart = null;
     winConditionHintLastText = null;
     return;
   }
+
   if (!winConditionHintEl) {
     winConditionHintEl = createDiv('');
     winConditionHintEl.class('win-condition-hint-overlay');
     winConditionHintEl.parent(document.body);
   }
-  if (winConditionHintShownAt == null) winConditionHintShownAt = millis();
   const levelIndices = getLevelTypeIndices(currentLevel);
   const names = levelIndices.map(function (i) { return ITEM_TYPES[i].name; }).join('、');
   const hintText = '過關：9 櫃（3×3）每櫃 3 格需「全部同一種」（' + names + '）';
 
-  // 僅在文字變更時更新 textContent，避免每幀 repaint
   if (winConditionHintLastText !== hintText) {
     winConditionHintEl.elt.textContent = hintText;
     winConditionHintLastText = hintText;
@@ -2748,25 +2853,8 @@ function drawWinConditionHint() {
   if (winConditionHintEl.elt.style.display !== 'block') {
     winConditionHintEl.elt.style.display = 'block';
   }
-
-  const elapsed = millis() - winConditionHintShownAt;
-  if (elapsed >= WIN_HINT_DISPLAY_MS) {
-    if (winConditionHintFadeStart == null) winConditionHintFadeStart = millis();
-    const fadeElapsed = millis() - winConditionHintFadeStart;
-    if (fadeElapsed >= WIN_HINT_FADE_MS) {
-      winConditionHintEl.elt.remove();
-      winConditionHintEl = null;
-      winConditionHintShownAt = null;
-      winConditionHintFadeStart = null;
-      winConditionHintLastText = null;
-      return;
-    }
-    winConditionHintEl.elt.style.opacity = Math.max(0, 1 - fadeElapsed / WIN_HINT_FADE_MS);
-  } else {
-    // 非淡出階段只設一次 opacity，不每幀改
-    if (winConditionHintEl.elt.style.opacity !== '1') {
-      winConditionHintEl.elt.style.opacity = '1';
-    }
+  if (winConditionHintEl.elt.style.opacity !== '1') {
+    winConditionHintEl.elt.style.opacity = '1';
   }
 }
 
