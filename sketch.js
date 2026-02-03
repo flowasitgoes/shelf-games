@@ -305,9 +305,11 @@ const DRAG_HOVER_PRESETS = {
 const BACKGROUND_MUSIC_DEFAULT = { f0: 385, f1: 430, f2: 630, vol: 0.085, dur: 0.06, attack: 0.016 };
 const AVATAR_54_98_BG_GRAY = 23; // 54～98 關卡片底色固定 23% 灰階（0%=白、100%=全黑）
 
-// 書櫃佈局：9 櫃排成 3×3，每櫃寬 cellW、高 cellH
-let shelfY, shelfH;   // 書櫃區域上緣與總高度（3 列）
+// 書櫃佈局：9 櫃，桌面 3×3、mobile 2×5（第一排櫃0櫃1、第二排櫃2櫃3…）
+const MOBILE_GRID_BREAKPOINT = 520;  // 畫布寬度小於此用 2×5
+let shelfY, shelfH;   // 書櫃區域上緣與總高度
 let cellW, cellH;    // 每櫃寬度、每櫃高度
+let gridCols, gridRows;  // 實際排列：桌面 3×3，mobile 2×5
 
 // 右上角交換區（兩格、青綠色背景）
 const SWAP_ZONE_SLOTS = 2;
@@ -1914,11 +1916,18 @@ function windowResized() {
 }
 
 function computeLayout() {
-  // 9 櫃排成 3×3：每櫃寬、每櫃高
-  cellW = width / GRID_COLS;
+  // mobile 寬度不夠用 2×5（櫃0櫃1 / 櫃2櫃3 / …），否則 3×3
+  if (width < MOBILE_GRID_BREAKPOINT) {
+    gridCols = 2;
+    gridRows = 5;  // 9 櫃：前 4 排各 2 櫃，最後一排 1 櫃
+  } else {
+    gridCols = GRID_COLS;
+    gridRows = GRID_ROWS;
+  }
+  cellW = width / gridCols;
   shelfH = height * 0.55;
   shelfY = height * 0.22;
-  cellH = shelfH / GRID_ROWS;
+  cellH = shelfH / gridRows;
   // 右上角交換區：寬約 26% 畫布，高約 18%，內有兩格 —— 已註解
   const margin = Math.min(width * 0.02, 12);
   // const zoneW = width * 0.26;
@@ -1953,6 +1962,12 @@ function computeLayout() {
     gap: 8
   };
   conveyorZone.segmentW = (conveyorZone.w - 2 * conveyorZone.pad - conveyorZone.labelWidth - (conveyorZone.segmentCount - 1) * conveyorZone.gap) / conveyorZone.segmentCount;
+}
+
+// 回傳某櫃左緣 X（2×5 時櫃 8 置中）
+function getCellLeftX(cellIndex) {
+  if (gridCols === 2 && cellIndex === NUM_CELLS - 1) return (width - cellW) / 2;
+  return (cellIndex % gridCols) * cellW;
 }
 
 function getSwapZoneSlotCenter(slotIndex) {
@@ -2048,9 +2063,8 @@ function updateItemPositions() {
   const slotH = (cellH - 2 * pad - (SLOTS_GRID_ROWS - 1) * gap) / SLOTS_GRID_ROWS;
   for (let c = 0; c < NUM_CELLS; c++) {
     const list = cells[c];
-    const cellCol = c % GRID_COLS;
-    const cellRow = floor(c / GRID_COLS);
-    const baseX = cellCol * cellW + pad;
+    const cellRow = floor(c / gridCols);
+    const baseX = getCellLeftX(c) + pad;
     const baseY = shelfY + cellRow * cellH + pad;
     for (let s = 0; s < list.length; s++) {
       const col = s % SLOTS_GRID_COLS;
@@ -2348,12 +2362,11 @@ function drawSwapHistoryZone() {
 function drawDropZones() {
   for (let c = 0; c < NUM_CELLS; c++) {
     const full = cells[c].length >= ITEMS_PER_CELL;
-    const cellCol = c % GRID_COLS;
-    const cellRow = floor(c / GRID_COLS);
+    const cellRow = floor(c / gridCols);
     fill(255, 255, 255, full ? 15 : 45);
     stroke(255, 200, 0, 180);
     strokeWeight(2);
-    rect(cellCol * cellW + 4, shelfY + cellRow * cellH, cellW - 8, cellH - 4, 8);
+    rect(getCellLeftX(c) + 4, shelfY + cellRow * cellH, cellW - 8, cellH - 4, 8);
     noStroke();
   }
 }
@@ -2434,14 +2447,15 @@ function drawShelfSeparators() {
   strokeWeight(2);
   noFill();
   // 水平線：每列上緣 + 最底
-  for (let r = 0; r <= GRID_ROWS; r++) {
+  for (let r = 0; r <= gridRows; r++) {
     const y = shelfY + r * cellH;
     line(0, y, width, y);
   }
-  // 垂直線：櫃與櫃之間
-  for (let col = 1; col < GRID_COLS; col++) {
+  // 垂直線：櫃與櫃之間（2×5 時最後一排只有櫃8置中，不畫到底免穿過櫃8）
+  const vertEndY = (gridCols === 2 && gridRows === 5) ? shelfY + (gridRows - 1) * cellH : shelfY + shelfH;
+  for (let col = 1; col < gridCols; col++) {
     const x = col * cellW;
-    line(x, shelfY, x, shelfY + shelfH);
+    line(x, shelfY, x, vertEndY);
   }
   noStroke();
 }
@@ -2460,9 +2474,8 @@ function drawShelves() {
   const ALPHA_INNER = 51;   // ~0.2，內層更透
   const ALPHA_SPECULAR = 191; // ~0.75 高光
   for (let c = 0; c < NUM_CELLS; c++) {
-    const cellCol = c % GRID_COLS;
-    const cellRow = floor(c / GRID_COLS);
-    const x = cellCol * cellW;
+    const cellRow = floor(c / gridCols);
+    const x = getCellLeftX(c);
     const y = shelfY + cellRow * cellH;
     // 外層：淡淡紫羅蘭邊框 ＋ 高透明紫白（玻璃 overlay 感）
     fill(G_OUT[0], G_OUT[1], G_OUT[2], ALPHA_OUTER);
@@ -2947,7 +2960,8 @@ function drawWinConditionHint() {
   }
   const levelIndices = getLevelTypeIndices(currentLevel);
   const names = levelIndices.map(function (i) { return ITEM_TYPES[i].name; }).join('、');
-  const hintText = '過關：9 櫃（3×3）每櫃 3 格需「全部同一種」（' + names + '）';
+  const gridLabel = gridCols === 2 ? '2×5' : '3×3';
+  const hintText = '過關：9 櫃（' + gridLabel + '）每櫃 3 格需「全部同一種」（' + names + '）';
 
   if (winConditionHintLastText !== hintText) {
     winConditionHintEl.elt.textContent = hintText;
@@ -3048,9 +3062,8 @@ function getSlotCenter(cellIndex, slotIndex) {
   const gap = 6;
   const slotW = (cellW - 2 * pad - (SLOTS_GRID_COLS - 1) * gap) / SLOTS_GRID_COLS;
   const slotH = (cellH - 2 * pad - (SLOTS_GRID_ROWS - 1) * gap) / SLOTS_GRID_ROWS;
-  const cellCol = cellIndex % GRID_COLS;
-  const cellRow = floor(cellIndex / GRID_COLS);
-  const baseX = cellCol * cellW + pad;
+  const cellRow = floor(cellIndex / gridCols);
+  const baseX = getCellLeftX(cellIndex) + pad;
   const baseY = shelfY + cellRow * cellH + pad;
   const col = slotIndex % SLOTS_GRID_COLS;
   const row = floor(slotIndex / SLOTS_GRID_COLS);
@@ -3097,19 +3110,25 @@ function getConveyorSegmentAt(px, py) {
 function getCellAt(px, py) {
   if (px < 0 || px > width || py < 0 || py > height) return -1;
   if (py < shelfY || py >= shelfY + shelfH) return -1;
-  const col = floor(px / cellW);
   const row = floor((py - shelfY) / cellH);
-  if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return -1;
-  return row * GRID_COLS + col;
+  if (row < 0 || row >= gridRows) return -1;
+  // 2×5 時最後一排只有櫃8置中
+  if (gridCols === 2 && gridRows === 5 && row === 4) {
+    const left8 = getCellLeftX(NUM_CELLS - 1);
+    if (px >= left8 && px < left8 + cellW) return NUM_CELLS - 1;
+    return -1;
+  }
+  const col = floor(px / cellW);
+  if (col < 0 || col >= gridCols) return -1;
+  return row * gridCols + col;
 }
 
 // 拖曳時用：若釋放點在「來源櫃」內，依該櫃四邊改判為上／下／左／右鄰櫃
 function getTargetCellWithBoundarySnap(px, py, srcCell) {
   let target = getCellAt(px, py);
   if (target < 0) return target;
-  const srcCol = srcCell % GRID_COLS;
-  const srcRow = floor(srcCell / GRID_COLS);
-  const cellLeft = srcCol * cellW;
+  const srcRow = floor(srcCell / gridCols);
+  const cellLeft = getCellLeftX(srcCell);
   const cellTop = shelfY + srcRow * cellH;
   const centerX = cellLeft + cellW * 0.5;
   const centerY = cellTop + cellH * 0.5;
@@ -3120,10 +3139,11 @@ function getTargetCellWithBoundarySnap(px, py, srcCell) {
     const distUp = py - cellTop;
     const distDown = (cellTop + cellH) - py;
     const minDist = Math.min(distLeft, distRight, distUp, distDown);
+    const srcCol = srcCell % gridCols;
     if (minDist === distLeft && srcCol > 0) return srcCell - 1;
-    if (minDist === distRight && srcCol < GRID_COLS - 1) return srcCell + 1;
-    if (minDist === distUp && srcRow > 0) return srcCell - GRID_COLS;
-    if (minDist === distDown && srcRow < GRID_ROWS - 1) return srcCell + GRID_COLS;
+    if (minDist === distRight && srcCol < gridCols - 1) return srcCell + 1;
+    if (minDist === distUp && srcRow > 0) return srcCell - gridCols;
+    if (minDist === distDown && srcRow < gridRows - 1) return srcCell + gridCols;
   }
   return target;
 }
