@@ -252,8 +252,9 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let isRecordingAudio = false;
 let audioRecordingStartedEver = false; // 僅在第一次拖曳時開始錄音
-let timeDisplayEl = null; // 時間顯示（在聲音按鈕下方）
-let levelDisplayEl = null; // 關卡顯示（在時間下方，如 ABC: 1）
+let timeDisplayEl = null; // 時間數值顯示（X 秒）
+let loveLabelImg = null;  // LOVE 標籤圖片（取代文字）
+let levelDisplayEl = null; // 關卡顯示（在時間下方，如 No.1 - ABC）
 let winConditionHintEl = null; // 過關提示 overlay（正上方）
 let winConditionHintLastText = null;  // 上次設定的文字，避免每幀改 DOM 造成 repaint
 let winConditionHintDismissed = false; // 使用者拖過卡片後即永久不再顯示（直到重新整理）
@@ -1756,9 +1757,17 @@ function setup() {
     stopAudioRecordingAndDownload();
   });
 
+  const timeDisplayWrap = createDiv('');
+  timeDisplayWrap.class('game-time-wrap');
+  timeDisplayWrap.parent(soundAndTimeWrap);
+
+  loveLabelImg = createImg('public/Love-label.png', 'LOVE');
+  loveLabelImg.class('game-love-label-img');
+  loveLabelImg.parent(timeDisplayWrap);
+
   timeDisplayEl = createSpan('');
   timeDisplayEl.class('game-time-display');
-  timeDisplayEl.parent(soundAndTimeWrap);
+  timeDisplayEl.parent(timeDisplayWrap);
 
   levelDisplayEl = createDiv('');
   levelDisplayEl.class('game-level-display');
@@ -2890,13 +2899,15 @@ function drawTimer() {
   if (!timeDisplayEl) return;
   if (gameState !== 'playing' && gameState !== 'completed') {
     timeDisplayEl.elt.textContent = '';
+    if (loveLabelImg && loveLabelImg.elt) loveLabelImg.elt.style.visibility = 'hidden';
     if (levelDisplayEl) levelDisplayEl.elt.textContent = '';
     return;
   }
+  if (loveLabelImg && loveLabelImg.elt) loveLabelImg.elt.style.visibility = 'visible';
   const elapsed = (startTime == null)
     ? 0
     : (gameState === 'completed' ? (endTime - startTime) / 1000 : (millis() - startTime) / 1000);
-  timeDisplayEl.elt.textContent = 'LOVE: ' + elapsed.toFixed(1) + ' 秒';
+  timeDisplayEl.elt.textContent = elapsed.toFixed(1) + ' 秒';
   if (levelDisplayEl && typeof currentLevel !== 'undefined' && LEVEL_GROUPS[currentLevel]) {
     levelDisplayEl.elt.textContent = 'No.' + (currentLevel + 1) + ' - ' + LEVEL_GROUPS[currentLevel];
   }
