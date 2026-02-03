@@ -243,9 +243,17 @@ let startTime;
 let endTime;
 let replayBtn;       // 再玩一次按鈕區域 { x, y, w, h }
 let audioCtx = null; // Web Audio 用於拖放音效（首次使用者操作時建立並 resume）
+let masterGainNode = null; // 所有音效先接到此節點，方便錄製整場輸出
 let soundEnabled = false; // 使用者點「開啟音效」後才播放
 let soundBarDiv = null;   // 正上方音效按鈕列
+// 錄製整場遊玩配樂（從第一次拖曳卡片開始）
+let audioRecordDestination = null; // MediaStreamAudioDestinationNode
+let mediaRecorder = null;
+let recordedChunks = [];
+let isRecordingAudio = false;
+let audioRecordingStartedEver = false; // 僅在第一次拖曳時開始錄音
 let timeDisplayEl = null; // 時間顯示（在聲音按鈕下方）
+let levelDisplayEl = null; // 關卡顯示（在時間下方，如 ABC: 1）
 let winConditionHintEl = null; // 過關提示 overlay（正上方）
 let winConditionHintLastText = null;  // 上次設定的文字，避免每幀改 DOM 造成 repaint
 let winConditionHintDismissed = false; // 使用者拖過卡片後即永久不再顯示（直到重新整理）
@@ -268,9 +276,21 @@ let dragHoverPreviewInterval = null; // BPM 預覽用 setInterval id
 let backgroundMusicInterval = null;  // 遊戲中「背景音樂」55 BPM 用
 let backgroundMusicStartedEver = false; // 整場遊戲只要 drag 過第一次就持續播放，不因換關停止
 let backgroundMusicF2ThisLevel = 430;  // 本關背景音樂高音（430~650 隨機，每關 initLevel 時重設）
-// 水滴流水聲（測試用）：可獨立開關，平靜穩定的溪流／倒水聲
-let waterStreamEnabled = false;
-let waterStreamNodes = null;  // { source, gain, filter, lfoGain } 用於 stop 時 disconnect
+// 關卡配樂：第 11 關起 11-20，每 10 關加一軌（21-30、31-40、…、81-90）；最多同時 3 軌，超過時淡出最先進來的那一軌
+const LEVEL_BGM_MAX_TRACKS = 3;
+const LEVEL_BGM_FADE_OUT_SEC = 2;
+const LEVEL_BGM_CONFIG = [
+  { levelMin: 10, id: '11-20', path: 'public/sounds/11-20/birds-forest-river.mp3' },
+  { levelMin: 20, id: '21-30', path: 'public/sounds/21-30/calm-stream-in-forest-19355.mp3' },
+  { levelMin: 30, id: '31-40', path: 'public/sounds/31-40/forest-163012.mp3' },
+  { levelMin: 40, id: '41-50', path: 'public/sounds/41-50/forest-atmosphere-013-localization-poland-369645.mp3' },
+  { levelMin: 50, id: '51-60', path: 'public/sounds/51-60/cute-music-26476.mp3' },
+  { levelMin: 60, id: '61-70', path: 'public/sounds/61-70/light-rain-ambient-114354.mp3' },
+  { levelMin: 70, id: '71-80', path: 'public/sounds/71-80/ping-pong-334413.mp3' },
+  { levelMin: 80, id: '81-90', path: 'public/sounds/81-90/pan-frying-noise-259550.mp3' }
+];
+let levelBgmBuffers = {};   // id -> AudioBuffer（已解碼）
+let activeLevelBgm = [];   // [ { id, source, gainNode }, ... ] 依加入順序，最多 3 個
 const DRAG_HOVER_PREVIEW_BPM = 55;   // 預覽節拍（55 BPM）
 const DRAG_HOVER_PRESETS = {
   '預設': {
@@ -831,8 +851,61 @@ function getSlabImageForType(typeIndex) {
 function getAudioContext() {
   if (audioCtx === null) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGainNode = audioCtx.createGain();
+    masterGainNode.gain.value = 1;
+    masterGainNode.connect(audioCtx.destination);
   }
   return audioCtx;
+}
+// 所有播放音效應連到此節點（經 master 再輸出），錄製時可從 master 分接
+function getAudioDestination() {
+  getAudioContext();
+  return masterGainNode;
+}
+
+// --- 錄製整場遊玩配樂（從第一次拖曳開始）---
+function startAudioRecording() {
+  if (isRecordingAudio) return;
+  try {
+    const ctx = getAudioContext();
+    audioRecordDestination = ctx.createMediaStreamDestination();
+    masterGainNode.connect(audioRecordDestination);
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(audioRecordDestination.stream);
+    mediaRecorder.ondataavailable = function (e) {
+      if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+    };
+    mediaRecorder.onstop = function () {
+      try {
+        masterGainNode.disconnect(audioRecordDestination);
+      } catch (err) { /* 可能已 disconnect */ }
+      if (audioRecordDestination.stream.getTracks) {
+        audioRecordDestination.stream.getTracks().forEach(function (t) { t.stop(); });
+      }
+      isRecordingAudio = false;
+      if (recordedChunks.length === 0) return;
+      const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'gameplay-music.webm';
+      a.click();
+      URL.revokeObjectURL(url);
+      recordedChunks = [];
+    };
+    mediaRecorder.start(1000);
+    isRecordingAudio = true;
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.warn) console.warn('startAudioRecording:', e);
+  }
+}
+
+function stopAudioRecordingAndDownload() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+  } else if (!isRecordingAudio && (!recordedChunks || recordedChunks.length === 0)) {
+    if (typeof alert !== 'undefined') alert('尚無錄音，請先拖曳卡片開始遊玩後再下載。');
+  }
 }
 
 // 依關卡回傳 pitch 倍率（每關略不同，同關內一致）
@@ -853,7 +926,7 @@ function playTone(freq, durationSeconds, type, volume) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(getAudioDestination());
       osc.frequency.value = freq;
       osc.type = type || 'sine';
       gain.gain.setValueAtTime(volume != null ? volume : 0.15, ctx.currentTime);
@@ -882,7 +955,7 @@ function playPadChord(freq, durationSeconds, volume) {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(getAudioDestination());
         osc.frequency.value = f;
         osc.type = type || 'sine';
         gain.gain.setValueAtTime(vol, t0);
@@ -966,11 +1039,11 @@ function playDragHoverSound(forcePlay, presetName, overrides) {
       gain2.gain.linearRampToValueAtTime(vol * p.vol2Ratio, t0 + delay2 + attack);
       gain2.gain.exponentialRampToValueAtTime(0.001, t0 + dur * p.dur2Ratio);
       osc0.connect(gain0);
-      gain0.connect(ctx.destination);
+      gain0.connect(getAudioDestination());
       osc1.connect(gain1);
-      gain1.connect(ctx.destination);
+      gain1.connect(getAudioDestination());
       osc2.connect(gain2);
-      gain2.connect(ctx.destination);
+      gain2.connect(getAudioDestination());
       osc0.start(t0);
       osc1.start(t0);
       osc2.start(t0 + delay2);
@@ -1033,7 +1106,7 @@ function playFirecrackerPop(vol, durationSec) {
       gain.gain.setValueAtTime(vol != null ? vol : 0.2, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
       src.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(getAudioDestination());
       src.start(ctx.currentTime);
       src.stop(ctx.currentTime + dur);
     }
@@ -1062,71 +1135,90 @@ function playFirecrackerSound() {
   }
 }
 
-// --- 水滴流水聲（平靜、細流，像沖咖啡倒水／溪流）---
-function stopWaterStreamSound() {
-  if (!waterStreamNodes) return;
-  try {
-    if (waterStreamNodes.lfo && waterStreamNodes.lfo.stop) waterStreamNodes.lfo.stop();
-    if (waterStreamNodes.source && waterStreamNodes.source.stop) waterStreamNodes.source.stop();
-    if (waterStreamNodes.source && waterStreamNodes.source.disconnect) waterStreamNodes.source.disconnect();
-    if (waterStreamNodes.gain && waterStreamNodes.gain.disconnect) waterStreamNodes.gain.disconnect();
-    if (waterStreamNodes.filter && waterStreamNodes.filter.disconnect) waterStreamNodes.filter.disconnect();
-    if (waterStreamNodes.lfoGain && waterStreamNodes.lfoGain.disconnect) waterStreamNodes.lfoGain.disconnect();
-  } catch (e) { /* ignore */ }
-  waterStreamNodes = null;
+// --- 關卡配樂（第 11 關起疊加，最多 3 軌，超過時淡出最舊的一軌）---
+function loadLevelBgmBuffer(id, path, callback) {
+  if (levelBgmBuffers[id]) {
+    if (callback) callback(levelBgmBuffers[id]);
+    return;
+  }
+  fetch(path)
+    .then(function (res) { return res.arrayBuffer(); })
+    .then(function (buf) {
+      const ctx = getAudioContext();
+      return ctx.decodeAudioData(buf);
+    })
+    .then(function (audioBuffer) {
+      levelBgmBuffers[id] = audioBuffer;
+      if (callback) callback(audioBuffer);
+    })
+    .catch(function (e) {
+      if (typeof console !== 'undefined' && console.warn) console.warn('loadLevelBgmBuffer', id, e);
+      if (callback) callback(null);
+    });
 }
 
-function startWaterStreamSound() {
-  if (waterStreamNodes) return;
+function playLevelBgmTrack(id, audioBuffer) {
+  if (!audioBuffer || !soundEnabled) return null;
   try {
     const ctx = getAudioContext();
-    function playNow() {
-      if (waterStreamNodes) return; // 若已關閉則不啟動
-      const sampleRate = ctx.sampleRate;
-      const durationSec = 2.5;
-      const frameCount = Math.round(sampleRate * durationSec);
-      const buffer = ctx.createBuffer(1, frameCount, sampleRate);
-      const data = buffer.getChannelData(0);
-      // 近似粉紅噪音（1/f）
-      let b0 = 0, b1 = 0, b2 = 0;
-      for (let i = 0; i < frameCount; i++) {
-        const white = (Math.random() * 2 - 1);
-        b0 = 0.99886 * b0 + white * 0.0555179;
-        b1 = 0.99332 * b1 + white * 0.0750759;
-        b2 = 0.96900 * b2 + white * 0.1538520;
-        data[i] = (b0 + b1 + b2) * 0.2;
-      }
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.loop = true;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.value = 900;
-      filter.Q.value = 1.2;
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.12, ctx.currentTime); // 提高音量以便聽得到
-      const lfo = ctx.createOscillator();
-      lfo.frequency.value = 0.25;
-      lfo.type = 'sine';
-      const lfoGain = ctx.createGain();
-      lfoGain.gain.setValueAtTime(0.02, ctx.currentTime);
-      lfo.connect(lfoGain);
-      lfoGain.connect(gain.gain);
-      source.connect(filter);
-      filter.connect(gain);
-      gain.connect(ctx.destination);
-      lfo.start(ctx.currentTime);
-      source.start(ctx.currentTime);
-      waterStreamNodes = { source, gain, filter, lfoGain, lfo };
-    }
-    if (ctx.state === 'suspended') {
-      ctx.resume().then(playNow).catch(function () { playNow(); });
-    } else {
-      playNow();
-    }
+    if (ctx.state === 'suspended') ctx.resume();
+    const source = ctx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.loop = true;
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0.35 * 0.85, ctx.currentTime);  // 關卡配樂音量 85%
+    source.connect(gainNode);
+    gainNode.connect(getAudioDestination());
+    source.start(ctx.currentTime);
+    return { id: id, source: source, gainNode: gainNode };
   } catch (e) {
-    if (typeof console !== 'undefined' && console.warn) console.warn('startWaterStreamSound:', e);
+    if (typeof console !== 'undefined' && console.warn) console.warn('playLevelBgmTrack', id, e);
+    return null;
   }
+}
+
+function fadeOutAndRemoveLevelBgm(entry) {
+  if (!entry || !entry.gainNode) return;
+  try {
+    const ctx = getAudioContext();
+    const now = ctx.currentTime;
+    entry.gainNode.gain.setValueAtTime(entry.gainNode.gain.value, now);
+    entry.gainNode.gain.linearRampToValueAtTime(0.001, now + LEVEL_BGM_FADE_OUT_SEC);
+    setTimeout(function () {
+      try {
+        if (entry.source && entry.source.stop) entry.source.stop();
+        if (entry.source && entry.source.disconnect) entry.source.disconnect();
+        if (entry.gainNode && entry.gainNode.disconnect) entry.gainNode.disconnect();
+      } catch (e) { /* ignore */ }
+      const idx = activeLevelBgm.indexOf(entry);
+      if (idx >= 0) activeLevelBgm.splice(idx, 1);
+    }, (LEVEL_BGM_FADE_OUT_SEC + 0.1) * 1000);
+  } catch (e) {
+    if (typeof console !== 'undefined' && console.warn) console.warn('fadeOutAndRemoveLevelBgm', e);
+  }
+}
+
+function updateLevelBgm(level) {
+  // 當前關卡應有的配樂：levelMin <= level 的取最後 3 個
+  const desired = LEVEL_BGM_CONFIG.filter(function (c) { return c.levelMin <= level; }).slice(-LEVEL_BGM_MAX_TRACKS);
+  const desiredIds = desired.map(function (c) { return c.id; });
+  // 淡出並移除「不該再播放」的軌道（不在 desired 裡的）；實際從陣列移除在淡出結束後由 fadeOutAndRemoveLevelBgm 的 setTimeout 執行
+  for (let i = activeLevelBgm.length - 1; i >= 0; i--) {
+    if (desiredIds.indexOf(activeLevelBgm[i].id) === -1) {
+      fadeOutAndRemoveLevelBgm(activeLevelBgm[i]);
+    }
+  }
+  // 加入「該播但還沒播」的軌道（在 desired 裡且尚未在 active 裡）
+  desired.forEach(function (cfg) {
+    const already = activeLevelBgm.some(function (e) { return e.id === cfg.id; });
+    if (already) return;
+    if (!soundEnabled) return;
+    loadLevelBgmBuffer(cfg.id, cfg.path, function (audioBuffer) {
+      if (!audioBuffer) return;
+      const entry = playLevelBgmTrack(cfg.id, audioBuffer);
+      if (entry) activeLevelBgm.push(entry);
+    });
+  });
 }
 
 // --- Debug ---
@@ -1375,26 +1467,9 @@ function setup() {
   soundAndTimeWrap.class('sound-and-time-wrap');
   soundAndTimeWrap.parent(soundBarDiv);
 
-  // 水滴流水聲開關（在「開啟聲音」按鈕左邊，供測試）
   const soundBtnRow = createDiv('');
   soundBtnRow.class('sound-btn-row');
   soundBtnRow.parent(soundAndTimeWrap);
-
-  const waterStreamWrap = createDiv('');
-  waterStreamWrap.class('water-stream-wrap');
-  waterStreamWrap.parent(soundBtnRow);
-
-  const waterStreamCheck = createCheckbox('水滴流水', false);
-  waterStreamCheck.class('water-stream-checkbox');
-  waterStreamCheck.parent(waterStreamWrap);
-  waterStreamCheck.elt.addEventListener('change', function () {
-    waterStreamEnabled = waterStreamCheck.checked();
-    if (waterStreamEnabled) {
-      startWaterStreamSound();
-    } else {
-      stopWaterStreamSound();
-    }
-  });
 
   // 背景音樂 UI 暫時用不到，先 comment 掉
   // (function () {
@@ -1673,9 +1748,21 @@ function setup() {
     }
   });
 
+  const downloadMusicBtn = createButton('📥');
+  downloadMusicBtn.class('sound-toggle-btn');
+  downloadMusicBtn.elt.title = '下載音樂檔';
+  downloadMusicBtn.parent(soundBtnRow);
+  downloadMusicBtn.elt.addEventListener('click', function () {
+    stopAudioRecordingAndDownload();
+  });
+
   timeDisplayEl = createSpan('');
   timeDisplayEl.class('game-time-display');
   timeDisplayEl.parent(soundAndTimeWrap);
+
+  levelDisplayEl = createDiv('');
+  levelDisplayEl.class('game-level-display');
+  levelDisplayEl.parent(soundAndTimeWrap);
 
   winConditionHintEl = createDiv('');
   winConditionHintEl.class('win-condition-hint-overlay');
@@ -1899,6 +1986,7 @@ function initLevel(level) {
   }
   updateItemPositions();
   pushStateToHistory('init');
+  updateLevelBgm(level);
 }
 
 function initGame() {
@@ -2802,12 +2890,16 @@ function drawTimer() {
   if (!timeDisplayEl) return;
   if (gameState !== 'playing' && gameState !== 'completed') {
     timeDisplayEl.elt.textContent = '';
+    if (levelDisplayEl) levelDisplayEl.elt.textContent = '';
     return;
   }
   const elapsed = (startTime == null)
     ? 0
     : (gameState === 'completed' ? (endTime - startTime) / 1000 : (millis() - startTime) / 1000);
   timeDisplayEl.elt.textContent = 'LOVE: ' + elapsed.toFixed(1) + ' 秒';
+  if (levelDisplayEl && typeof currentLevel !== 'undefined' && LEVEL_GROUPS[currentLevel]) {
+    levelDisplayEl.elt.textContent = 'No.' + (currentLevel + 1) + ' - ' + LEVEL_GROUPS[currentLevel];
+  }
 }
 
 function drawWinConditionHint() {
@@ -3062,6 +3154,11 @@ function pointerPressed(px, py) {
     dragY = py - draggedItem.offsetY;
     // 第一次拖曳卡片時，若尚未開啟音效，自動開啟並更新按鈕為 🔊（整場保持開啟，不因換關切換）
     if (!soundEnabled) enableSound();
+    // 整場遊戲第一次拖曳時開始錄製配樂（之後不重複開始）
+    if (!audioRecordingStartedEver) {
+      audioRecordingStartedEver = true;
+      startAudioRecording();
+    }
     playDragStartSound();
     // 整場遊戲第一次 drag 時開始「背景音樂」，之後不因換關停止，一直播放
     if (!backgroundMusicStartedEver) {
