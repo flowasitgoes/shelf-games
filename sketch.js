@@ -1447,7 +1447,7 @@ function preload() {
       avatarImagesByLevel[level][i] = loadImage(urls[i]);
     }
   }
-  bgImage = loadImage('public/background-theme.png');
+  // bgImage = loadImage('public/background-theme.png');
 }
 
 function setup() {
@@ -2555,12 +2555,14 @@ function drawDragOrbitPlanets(cx, cy) {
   const lite = ANIMATION_LITE;
   const bloomCount = lite ? 4 : 6;
   const useShadow = !lite;
+  // mobile 時光圈稍微小一點
+  const glowScale = (width < MOBILE_GRID_BREAKPOINT) ? 0.85 : 1;
 
   // ---- 光暈綻放：多層橢圓（不用 shadowBlur，手機上非常耗效能）----
   noStroke();
   for (let i = 0; i < bloomCount; i++) {
     const breath = 0.75 + 0.35 * sin(t + i * 0.7) + (lite ? 0 : 0.15 * organicNoise(phase, i));
-    const radius = (35 + i * (lite ? 18 : 12) + (lite ? 4 : 8) * sin(t * 1.2 + i * 0.5)) * breath;
+    const radius = (35 + i * (lite ? 18 : 12) + (lite ? 4 : 8) * sin(t * 1.2 + i * 0.5)) * breath * glowScale;
     const alpha = (12 + 14 * sin(t * 0.9 + i * 0.4) + (lite ? 0 : 6 * organicNoise(phase, i + 10))) | 0;
     fill(255, 255, 255, Math.max(2, alpha));
     if (useShadow) {
@@ -2587,7 +2589,7 @@ function drawDragOrbitPlanets(cx, cy) {
   for (let o = 0; o < orbits.length; o++) {
     const orb = orbits[o];
     const wobble = 1 + 0.06 * sin(phase * 1.1 + o * 2) + (lite ? 0 : 0.04 * organicNoise(phase, o + 5));
-    const r = orb.radius * wobble;
+    const r = orb.radius * wobble * glowScale;
     const angle = phase * orb.speed;
     stroke(255, 255, 255, 35 + 28 * sin(phase + o * 0.8));
     strokeWeight(1.5);
@@ -2604,7 +2606,7 @@ function drawDragOrbitPlanets(cx, cy) {
         drawingContext.shadowBlur = 6 + 4 * twinkle;
         drawingContext.shadowColor = 'rgba(255,255,255,0.5)';
       }
-      circle(px, py, lite ? 8 : 9);
+      circle(px, py, (lite ? 8 : 9) * glowScale);
       if (useShadow) drawingContext.shadowBlur = 0;
     }
   }
@@ -2617,11 +2619,12 @@ function drawDragOrbitPlanets(cx, cy) {
   for (let s = 0; s < starOrbits.length; s++) {
     const so = starOrbits[s];
     const starAngle = phase * so.speed;
+    const starR = so.radius * glowScale;
     for (let k = 0; k < so.count; k++) {
       const a = starAngle + (TWO_PI * k) / so.count + (lite ? 0 : 0.2 * sin(phase + k));
-      const sx = cx + so.radius * cos(a);
-      const sy = cy + so.radius * sin(a);
-      const starSize = lite ? 4 : 4 + 3 * organicNoise(phase, s + k * 7);
+      const sx = cx + starR * cos(a);
+      const sy = cy + starR * sin(a);
+      const starSize = (lite ? 4 : 4 + 3 * organicNoise(phase, s + k * 7)) * glowScale;
       const starRot = phase * 0.5 + k * 0.6;
       const starAlpha = lite ? 220 : 180 + 75 * organicNoise(phase * 1.2, k + s * 4);
       fill(255, 255, 230, starAlpha);
