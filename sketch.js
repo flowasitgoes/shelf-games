@@ -319,7 +319,7 @@ const SLAB_ICON_GRADIENT_STOPS = [
   { offset: '85%', color: 'rgb(115,115,115)' },
   { offset: '100%', color: 'rgb(194,194,194)' }
 ];
-// Platinum 按鈕風格漸層（參考 .button-platinum）：#dedeff / #ffffff / #555564 多層，角度 -72deg
+// Platinum 按鈕風格漸層（參考 .button-platinum）：awe1～awe10
 const SLAB_ICON_GRADIENT_STOPS_PLATINUM = [
   { offset: '0%', color: '#dedeff' },
   { offset: '16%', color: '#ffffff' },
@@ -334,6 +334,35 @@ const SLAB_ICON_GRADIENT_STOPS_PLATINUM = [
   { offset: '84%', color: '#dedeff' },
   { offset: '100%', color: '#555564' }
 ];
+// Bronze 三色漸層（awe11～awe20）：固定 3 個 stop，效能較佳
+const SLAB_ICON_GRADIENT_STOPS_BRONZE = [
+  { offset: '0%', color: '#3d1259' },
+  { offset: '50%', color: '#8f8f8f' },
+  { offset: '100%', color: '#404040' }
+];
+// Gold 三色漸層（awe21～awe30）：#ffde45, #ffffff, #5c90c7
+const SLAB_ICON_GRADIENT_STOPS_GOLD = [
+  { offset: '0%', color: '#ffde45' },
+  { offset: '50%', color: '#ffffff' },
+  { offset: '100%', color: '#5c90c7' }
+];
+// 可動態調整的 Bronze / Gold 漸層副本（UI 變更後即時套用）
+let slabGradientStopsBronzeLive = [];
+let slabGradientStopsGoldLive = [];
+// Bronze 關鍵色對應的 stop 索引（0=主色, 1=淺色, 2=深色）各 1 個
+const SLAB_BRONZE_KEY_INDICES = [[0], [1], [2]];
+const SLAB_BRONZE_KEY_DEFAULTS = ['#3d1259', '#8f8f8f', '#404040'];
+// Gold 關鍵色對應的 stop 索引（0=主色, 1=白, 2=深色）各 1 個
+const SLAB_GOLD_KEY_INDICES = [[0], [1], [2]];
+const SLAB_GOLD_KEY_DEFAULTS = ['#ffde45', '#ffffff', '#5c90c7'];
+
+// 依 awe 關卡索引回傳對應漸層 stops：awe1-10 platinum、awe11-20 bronze、awe21-30 gold；角度每關隨機。bronze/gold 回傳可編輯的 live 陣列
+function getSlabGradientStopsForLevel(levelIndex) {
+  if (levelIndex >= 23 && levelIndex <= 32) return SLAB_ICON_GRADIENT_STOPS_PLATINUM;
+  if (levelIndex >= 33 && levelIndex <= 42) return slabGradientStopsBronzeLive.length ? slabGradientStopsBronzeLive : SLAB_ICON_GRADIENT_STOPS_BRONZE;
+  if (levelIndex >= 43 && levelIndex <= 52) return slabGradientStopsGoldLive.length ? slabGradientStopsGoldLive : SLAB_ICON_GRADIENT_STOPS_GOLD;
+  return SLAB_ICON_GRADIENT_STOPS_PLATINUM;
+}
 const SLAB_ICON_GRADIENT_ANGLE_PLATINUM = -72;  // 參考 .button-platinum；實際使用改為每關隨機角度
 // 隨機產生多層灰階漸層 stops（5～7 個色階，在黑與白之間）
 function getRandomGrayscaleStops() {
@@ -523,7 +552,7 @@ function pickThreeSlabIcons() {
 function ensureSlabIconsForLevel(levelIndex) {
   if (slabIconNamesByLevel[levelIndex] == null) return;
   if (slabGradientByLevel[levelIndex] == null) {
-    slabGradientByLevel[levelIndex] = { stops: SLAB_ICON_GRADIENT_STOPS_PLATINUM, angleDeg: Math.floor(Math.random() * 360) };
+    slabGradientByLevel[levelIndex] = { stops: getSlabGradientStopsForLevel(levelIndex), angleDeg: Math.floor(Math.random() * 360) };
   }
   if (slabImagesByLevel[levelIndex] == null) {
     slabImagesByLevel[levelIndex] = [null, null, null];
@@ -552,6 +581,71 @@ function ensureSlabIconsForLevel(levelIndex) {
   }
 }
 
+// 重新套用漸層並載入圖示（用於 Bronze/Gold UI 變更後即時更新 awe11-20 / awe21-30）
+function refreshSlabIconsForLevelRange(startL, endL) {
+  for (var L = startL; L <= endL; L++) {
+    if (slabIconNamesByLevel[L] == null || !slabImagesByLevel[L]) continue;
+    var grad = slabGradientByLevel[L];
+    if (!grad) grad = slabGradientByLevel[L] = { stops: getSlabGradientStopsForLevel(L), angleDeg: Math.floor(Math.random() * 360) };
+    else grad.stops = getSlabGradientStopsForLevel(L);
+    for (var j = 0; j < 3; j++) {
+      (function (lev, idx) {
+        var name = slabIconNamesByLevel[lev][idx];
+        var url = FONT_AWESOME_SVG_BASE + name + '.svg';
+        var gradId = 'iconGrad_' + lev + '_' + idx;
+        fetch(url, { mode: 'cors' })
+          .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+          .then(function (svgText) {
+            var g = slabGradientByLevel[lev];
+            var withGradient = g.stops
+              ? applySvgLinearGradient(svgText, gradId, g)
+              : applySvgLinearGradient(svgText, gradId, g.start, g.end);
+            var blob = new Blob([withGradient], { type: 'image/svg+xml;charset=utf-8' });
+            var blobUrl = URL.createObjectURL(blob);
+            loadImage(blobUrl, function (img) {
+              if (img && slabImagesByLevel[lev] && idx >= 0 && idx <= 2) slabImagesByLevel[lev][idx] = img;
+              URL.revokeObjectURL(blobUrl);
+            });
+          })
+          .catch(function () {});
+      })(L, j);
+    }
+  }
+}
+
+// 更新 Bronze 或 Gold 的關鍵色後，刷新對應關卡圖示
+function updateSlabLiveStopsBronzeKey(keyIndex, hex) {
+  var arr = slabGradientStopsBronzeLive;
+  if (!arr.length) return;
+  hex = normalizeHex(hex);
+  for (var i = 0; i < SLAB_BRONZE_KEY_INDICES[keyIndex].length; i++) {
+    var idx = SLAB_BRONZE_KEY_INDICES[keyIndex][i];
+    if (idx >= 0 && idx < arr.length) arr[idx].color = hex;
+  }
+  // 只刷新單一關卡（目前關卡若在 awe11-20 則刷該關，否則刷 awe11）共 3 個圖示，減少 lag
+  var L = (typeof currentLevel !== 'undefined' && currentLevel >= 33 && currentLevel <= 42) ? currentLevel : 33;
+  refreshSlabIconsForLevelRange(L, L);
+}
+function updateSlabLiveStopsGoldKey(keyIndex, hex) {
+  var arr = slabGradientStopsGoldLive;
+  if (!arr.length) return;
+  hex = normalizeHex(hex);
+  for (var i = 0; i < SLAB_GOLD_KEY_INDICES[keyIndex].length; i++) {
+    var idx = SLAB_GOLD_KEY_INDICES[keyIndex][i];
+    if (idx >= 0 && idx < arr.length) arr[idx].color = hex;
+  }
+  // 只刷新單一關卡（目前關卡若在 awe21-30 則刷該關，否則刷 awe21）共 3 個圖示，減少 lag
+  var L = (typeof currentLevel !== 'undefined' && currentLevel >= 43 && currentLevel <= 52) ? currentLevel : 43;
+  refreshSlabIconsForLevelRange(L, L);
+}
+function normalizeHex(hex) {
+  if (typeof hex !== 'string') return '#000000';
+  hex = hex.replace(/^#/, '');
+  if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  if (hex.length !== 6) return '#000000';
+  return '#' + hex.toLowerCase();
+}
+
 // 確保 awe1～awe30 共 30 關都選好圖示並開始載入；清單存 localStorage，重整後不變、利於快取
 function ensureAllSlabLevelsReady() {
   var stored = getAweLevelIconsFromStorage();
@@ -578,7 +672,7 @@ function ensureAllSlabLevelsReady() {
           const current = slabImagesByLevel[lev][j];
           if (!current || (typeof current.width === 'number' && current.width <= 0)) {
             const rawSvg = SLAB_FALLBACK_SVG_STRINGS[j];
-            var grad = slabGradientByLevel[lev] || { stops: SLAB_ICON_GRADIENT_STOPS_PLATINUM, angleDeg: Math.floor(Math.random() * 360) };
+            var grad = slabGradientByLevel[lev] || { stops: getSlabGradientStopsForLevel(lev), angleDeg: Math.floor(Math.random() * 360) };
             var withGradient = grad.stops
               ? applySvgLinearGradient(rawSvg, 'fallbackGrad_' + lev + '_' + j, grad)
               : applySvgLinearGradient(rawSvg, 'fallbackGrad_' + lev + '_' + j, grad.start, grad.end);
@@ -1071,6 +1165,12 @@ function setup() {
   soundAndCanvas.class('sound-and-canvas-wrapper');
   soundAndCanvas.parent('game-container');
 
+  // 初始化 Bronze / Gold 漸層可編輯副本（供 UI 動態調整）
+  if (slabGradientStopsBronzeLive.length === 0) {
+    slabGradientStopsBronzeLive = SLAB_ICON_GRADIENT_STOPS_BRONZE.map(function (s) { return { offset: s.offset, color: s.color }; });
+    slabGradientStopsGoldLive = SLAB_ICON_GRADIENT_STOPS_GOLD.map(function (s) { return { offset: s.offset, color: s.color }; });
+  }
+
   soundBarDiv = createDiv('');
   soundBarDiv.class('sound-bar');
   soundBarDiv.parent(soundAndCanvas);
@@ -1154,6 +1254,105 @@ function setup() {
           clearInterval(dragHoverPreviewInterval);
           dragHoverPreviewInterval = null;
         }
+      }
+    });
+  })();
+
+  // awe 填色 UI（在調整背景音樂下方）：Bronze awe11-20、Gold awe21-30 關鍵色可動態調整
+  (function () {
+    const wrap = createDiv('');
+    wrap.class('awe-fill-params-wrap');
+    wrap.parent(soundBarDiv);
+    const title = createDiv('awe 填色');
+    title.class('awe-fill-title');
+    title.parent(wrap);
+
+    function addColorRow(parentEl, label, keyIndex, isBronze, defaultHex) {
+      const row = createDiv('');
+      row.class('awe-fill-row');
+      row.parent(parentEl);
+      const labelSpan = createSpan(label);
+      labelSpan.class('awe-fill-label');
+      labelSpan.parent(row);
+      const colorInput = createInput(defaultHex, 'color');
+      colorInput.class('awe-fill-color');
+      colorInput.parent(row);
+      const hexInput = createInput(defaultHex, 'text');
+      hexInput.class('awe-fill-hex');
+      hexInput.parent(row);
+      function syncFromColorPicker() {
+        var hex = colorInput.value();
+        hexInput.value(hex);
+        if (isBronze) updateSlabLiveStopsBronzeKey(keyIndex, hex);
+        else updateSlabLiveStopsGoldKey(keyIndex, hex);
+      }
+      function syncFromHexInput() {
+        var hex = normalizeHex(hexInput.value());
+        hexInput.value(hex);
+        colorInput.value(hex);
+        if (isBronze) updateSlabLiveStopsBronzeKey(keyIndex, hex);
+        else updateSlabLiveStopsGoldKey(keyIndex, hex);
+      }
+      colorInput.elt.addEventListener('input', syncFromColorPicker);
+      hexInput.elt.addEventListener('change', syncFromHexInput);
+      hexInput.elt.addEventListener('blur', syncFromHexInput);
+    }
+
+    const bronzeSection = createDiv('');
+    bronzeSection.class('awe-fill-section');
+    bronzeSection.parent(wrap);
+    const bronzeTitle = createSpan('Bronze (awe11-20)');
+    bronzeTitle.class('awe-fill-section-title');
+    bronzeTitle.parent(bronzeSection);
+    addColorRow(bronzeSection, '主色', 0, true, SLAB_BRONZE_KEY_DEFAULTS[0]);
+    addColorRow(bronzeSection, '淺色', 1, true, SLAB_BRONZE_KEY_DEFAULTS[1]);
+    addColorRow(bronzeSection, '深色', 2, true, SLAB_BRONZE_KEY_DEFAULTS[2]);
+    const bronzeReset = createButton('預設');
+    bronzeReset.class('awe-fill-reset');
+    bronzeReset.parent(bronzeSection);
+    bronzeReset.elt.addEventListener('click', function () {
+      for (var i = 0; i < SLAB_BRONZE_KEY_DEFAULTS.length; i++) {
+        for (var k = 0; k < SLAB_BRONZE_KEY_INDICES[i].length; k++) {
+          var idx = SLAB_BRONZE_KEY_INDICES[i][k];
+          slabGradientStopsBronzeLive[idx].color = SLAB_BRONZE_KEY_DEFAULTS[i];
+        }
+      }
+      refreshSlabIconsForLevelRange(33, 33);
+      var rows = bronzeSection.elt.querySelectorAll('.awe-fill-row');
+      for (var i = 0; i < 3 && i < rows.length; i++) {
+        var colorInp = rows[i].querySelector('.awe-fill-color');
+        var hexInp = rows[i].querySelector('.awe-fill-hex');
+        if (colorInp) colorInp.value = SLAB_BRONZE_KEY_DEFAULTS[i];
+        if (hexInp) hexInp.value = SLAB_BRONZE_KEY_DEFAULTS[i];
+      }
+    });
+
+    const goldSection = createDiv('');
+    goldSection.class('awe-fill-section');
+    goldSection.parent(wrap);
+    const goldTitle = createSpan('Gold (awe21-30)');
+    goldTitle.class('awe-fill-section-title');
+    goldTitle.parent(goldSection);
+    addColorRow(goldSection, '主色', 0, false, SLAB_GOLD_KEY_DEFAULTS[0]);
+    addColorRow(goldSection, '白', 1, false, SLAB_GOLD_KEY_DEFAULTS[1]);
+    addColorRow(goldSection, '深色', 2, false, SLAB_GOLD_KEY_DEFAULTS[2]);
+    const goldReset = createButton('預設');
+    goldReset.class('awe-fill-reset');
+    goldReset.parent(goldSection);
+    goldReset.elt.addEventListener('click', function () {
+      for (var i = 0; i < SLAB_GOLD_KEY_DEFAULTS.length; i++) {
+        for (var k = 0; k < SLAB_GOLD_KEY_INDICES[i].length; k++) {
+          var idx = SLAB_GOLD_KEY_INDICES[i][k];
+          slabGradientStopsGoldLive[idx].color = SLAB_GOLD_KEY_DEFAULTS[i];
+        }
+      }
+      refreshSlabIconsForLevelRange(43, 43);
+      var rows = goldSection.elt.querySelectorAll('.awe-fill-row');
+      for (var i = 0; i < 3 && i < rows.length; i++) {
+        var colorInp = rows[i].querySelector('.awe-fill-color');
+        var hexInp = rows[i].querySelector('.awe-fill-hex');
+        if (colorInp) colorInp.value = SLAB_GOLD_KEY_DEFAULTS[i];
+        if (hexInp) hexInp.value = SLAB_GOLD_KEY_DEFAULTS[i];
       }
     });
   })();
